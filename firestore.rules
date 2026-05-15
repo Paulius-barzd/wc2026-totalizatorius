@@ -1,0 +1,110 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // === HELPER FUNKCIJOS ===
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function matchExists(matchId) {
+      return exists(/databases/$(database)/documents/matches/$(matchId));
+    }
+
+    function matchStatus(matchId) {
+      return get(/databases/$(database)/documents/matches/$(matchId)).data.status;
+    }
+
+    // === USERS ===
+    // Vartotojų profiliai
+
+    match /users/{userId} {
+      // Visi prisijungę gali skaityti profilius (reikalinga lyderlentei)
+      allow read: if isAuth();
+
+      // Tik vartotojas gali sukurti SAVO profilį
+      // KRITIŠKA: isAdmin turi būti false (negali pats save padaryti admin'u)
+      allow create: if isOwner(userId) &&
+                       request.resource.data.isAdmin == false &&
+                       request.resource.data.uid == userId;
+
+      // Vartotojas gali atnaujinti savo profilį, BET NE pakeisti isAdmin
+      // Admin teisės keičiamos tik per Firebase Console rankiniu būdu
+      allow update: if isOwner(userId) &&
+                       request.resource.data.isAdmin == resource.data.isAdmin;
+
+      // Trinti negalima
+      allow delete: if false;
+    }
+
+    // === MATCHES ===
+    // Rungtynių sąrašas
+
+    match /matches/{matchId} {
+      // Visi prisijungę mato rungtynes
+      allow read: if isAuth();
+
+      // Tik admin gali kurti/modifikuoti/trinti rungtynes
+      allow write: if isAdmin();
+    }
+
+    // === PREDICTIONS ===
+    // Vartotojų prognozės
+
+    match /predictions/{predId} {
+      // Skaityti gali:
+      // 1) Pats vartotojas savo prognozes
+      // 2) Admin - visas prognozes
+      // 3) Visi - po rungtynių pradžios (statistikai)
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        (matchExists(resource.data.matchId) &&
+         matchStatus(resource.data.matchId) != 'upcoming')
+      );
+
+      // Sukurti naują prognozę:
+      // - Tik savo (userId turi sutapti su request.auth.uid)
+      // - Tik jei rungtynės dar neprasidėjo (status == 'upcoming')
+      allow create: if isOwner(request.resource.data.userId) &&
+                       matchExists(request.resource.data.matchId) &&
+                       matchStatus(request.resource.data.matchId) == 'upcoming';
+
+      // Atnaujinti prognozę:
+      // - Tik savo
+      // - Tik jei rungtynės dar neprasidėjo
+      allow update: if isOwner(resource.data.userId) &&
+                       matchStatus(resource.data.matchId) == 'upcoming' &&
+                       request.resource.data.userId == resource.data.userId;
+
+      // Trinti gali tik admin
+      allow delete: if isAdmin();
+    }
+
+    // === TOURNAMENT BETS ===
+    // Turnyro lygio prognozės (čempionas, strielcas, grupių nugalėtojai)
+
+    match /tournamentBets/{userId} {
+      // Visi mato (reikalinga lyderlentei vėliau)
+      allow read: if isAuth();
+
+      // Tik savininkas gali rašyti
+      allow create: if isOwner(userId) &&
+                       request.resource.data.userId == userId;
+      allow update: if isOwner(userId);
+      allow delete: if false;
+    }
+  }
+}
