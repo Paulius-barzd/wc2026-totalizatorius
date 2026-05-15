@@ -303,13 +303,53 @@ const TeamBlock = ({ code }) => {
 const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
   const isLocked = match.status !== 'upcoming';
   const tu = timeUntil(match.kickoff);
-  const homePred = prediction?.home ?? 0;
-  const awayPred = prediction?.away ?? 0;
+
+  // Lokalus state - kas dabar redaguojama (gali skirtis nuo išsaugotos prognozės)
+  const [localPred, setLocalPred] = useState({
+    home: prediction?.home ?? 0,
+    away: prediction?.away ?? 0,
+  });
+  const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Sinchronizuoti lokalų state kai prediction iš Firestore pasikeičia
+  useEffect(() => {
+    if (prediction) {
+      setLocalPred({ home: prediction.home, away: prediction.away });
+    }
+  }, [prediction?.home, prediction?.away]);
+
+  // Ar yra neišsaugotų pakeitimų?
+  const hasChanges = !prediction
+    ? true // Nėra išsaugotos prognozės - mygtukas aktyvus
+    : prediction.home !== localPred.home || prediction.away !== localPred.away;
 
   let pointsResult = null;
   if (match.status === 'finished' && prediction) {
     pointsResult = calculatePoints(prediction, match.actualScore);
   }
+
+  const handleSave = async () => {
+    if (isLocked || !hasChanges || saving) return;
+    setSaving(true);
+    try {
+      await onUpdatePrediction(match.id, localPred);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Mygtuko būsenos
+  const getButtonState = () => {
+    if (saving) return { text: 'Saugoma...', icon: 'spinner', bg: '#0e6b47', color: '#ffffff', disabled: true };
+    if (justSaved) return { text: 'Išsaugota', icon: 'check', bg: '#0e6b47', color: '#ffffff', disabled: true };
+    if (!hasChanges && prediction) return { text: 'Spėjimas išsaugotas', icon: 'check', bg: '#f0ebe1', color: '#6b6359', disabled: true };
+    if (prediction) return { text: 'Atnaujinti spėjimą', icon: null, bg: '#0e6b47', color: '#ffffff', disabled: false };
+    return { text: 'Patvirtinti spėjimą', icon: null, bg: '#0e6b47', color: '#ffffff', disabled: false };
+  };
+  const btn = getButtonState();
 
   return (
     <div className="card-light rounded-xl p-4">
@@ -347,7 +387,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
           <>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-[#0e6b47] uppercase tracking-wider flex items-center gap-1">
-                <Target className="w-3 h-3" /> Tavo prognozė
+                <Target className="w-3 h-3" /> {prediction ? 'Tavo spėjimas' : 'Tavo prognozė'}
               </span>
               {tu && (
                 <span className="text-[10px] font-mono text-[#6b6359]">
@@ -355,11 +395,22 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
                 </span>
               )}
             </div>
-            <div className="flex items-center justify-center gap-3">
-              <ScoreInput value={homePred} onChange={(v) => onUpdatePrediction(match.id, { home: v, away: awayPred })} disabled={isLocked} />
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <ScoreInput value={localPred.home}
+                onChange={(v) => setLocalPred({ ...localPred, home: v })}
+                disabled={isLocked || saving} />
               <span className="text-[#6b6359] font-mono">:</span>
-              <ScoreInput value={awayPred} onChange={(v) => onUpdatePrediction(match.id, { home: homePred, away: v })} disabled={isLocked} />
+              <ScoreInput value={localPred.away}
+                onChange={(v) => setLocalPred({ ...localPred, away: v })}
+                disabled={isLocked || saving} />
             </div>
+            <button onClick={handleSave} disabled={btn.disabled}
+              style={{ backgroundColor: btn.bg, color: btn.color }}
+              className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              {btn.icon === 'spinner' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {btn.icon === 'check' && <CheckCircle2 className="w-3.5 h-3.5" />}
+              {btn.text}
+            </button>
           </>
         )}
 
@@ -369,7 +420,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
               <Lock className="w-3.5 h-3.5 text-[#6b6359]" />
               {prediction ? (
                 <span className="text-xs text-[#6b6359]">
-                  Tavo prognozė: <span className="font-mono font-bold text-[#1a1410]">{prediction.home}:{prediction.away}</span>
+                  Tavo spėjimas: <span className="font-mono font-bold text-[#1a1410]">{prediction.home}:{prediction.away}</span>
                 </span>
               ) : (
                 <span className="text-xs text-[#c8302e]">Nespėjai pažymėti prognozės</span>
