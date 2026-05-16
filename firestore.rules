@@ -40,13 +40,31 @@ service cloud.firestore {
                        request.resource.data.isAdmin == false &&
                        request.resource.data.uid == userId;
 
-      // Vartotojas gali atnaujinti savo profilį, BET NE pakeisti isAdmin
-      // Admin teisės keičiamos tik per Firebase Console rankiniu būdu
+      // Vartotojas gali atnaujinti savo profilį, BET NE pakeisti isAdmin/company
+      // Admin teisės ir įmonė keičiamos tik per Firebase Console rankiniu būdu
       allow update: if isOwner(userId) &&
-                       request.resource.data.isAdmin == resource.data.isAdmin;
+                       request.resource.data.isAdmin == resource.data.isAdmin &&
+                       request.resource.data.companyId == resource.data.companyId &&
+                       request.resource.data.companyName == resource.data.companyName;
+
+      // Admin gali keisti bet ką (įskaitant kitų vartotojų įmonę)
+      allow update: if isAdmin();
 
       // Trinti negalima
       allow delete: if false;
+    }
+
+    // === COMPANIES ===
+    // Įmonių sąrašas registracijos dropdown'ui
+
+    match /companies/{companyId} {
+      // Vieša skaityti (reikalinga registracijos formoje prieš autentifikaciją)
+      // Įmonės pavadinimas nėra slapta informacija
+      allow read: if true;
+
+      // Tik admin gali kurti/keisti/trinti įmones
+      // (Pridedama rankiniu būdu per Firebase Console)
+      allow write: if isAdmin();
     }
 
     // === MATCHES ===
