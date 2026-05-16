@@ -424,6 +424,18 @@ function mapApiStatus(apiStatus) {
   return 'upcoming'; // TIMED, SCHEDULED, POSTPONED, CANCELLED, SUSPENDED
 }
 
+// API stage → mūsų vidinis stage
+const API_STAGE_TO_INTERNAL = {
+  'GROUP_STAGE': 'group',
+  'LAST_32': 'round_of_32',
+  'LAST_16': 'round_of_16',
+  'QUARTER_FINALS': 'quarter_final',
+  'SEMI_FINALS': 'semi_final',
+  'THIRD_PLACE': 'third_place',
+  'THIRD_PLACE_FINAL': 'third_place',
+  'FINAL': 'final',
+};
+
 // Pagrindinė sinchronizavimo funkcija
 // Kviečia Netlify Function (tarpininkas), kuri jau turi API raktą serveryje
 // Tai sprendžia CORS problemą + raktas paslėptas serveryje
@@ -463,6 +475,7 @@ export async function syncResultsFromAPI() {
     total: apiMatches.length,
     matched: 0,
     updated: 0,
+    created: 0,
     skipped: 0,
     unmatched: [],
   };
@@ -473,7 +486,7 @@ export async function syncResultsFromAPI() {
     const homeCode = findTeamCode(apiMatch.homeTeam);
     const awayCode = findTeamCode(apiMatch.awayTeam);
 
-    // Neradome komandų kodų - knockout etape gali būti "Winner Group A" ar panašiai
+    // Neradome komandų kodų - dažniausiai knockout match'as su null komandomis (TBD)
     if (!homeCode || !awayCode) {
       stats.unmatched.push(`${apiMatch.homeTeam?.name || '?'} vs ${apiMatch.awayTeam?.name || '?'}`);
       continue;
@@ -487,7 +500,40 @@ export async function syncResultsFromAPI() {
       return Math.abs(apiTime - ourTime) < 24 * 3600000;
     });
 
+    // Jei mūsų DB nėra šio match'o - patikrinti, ar tai knockout etapas su žinomomis komandomis
     if (!ourMatch) {
+      const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
+
+      // Auto-create knockout etapo match'as (grupių jau seedinti rankiniu būdu g01-g72)
+      if (internalStage && internalStage !== 'group') {
+        const newId = `wc${apiMatch.id}`;
+        const newStatus = mapApiStatus(apiMatch.status);
+
+        let newScore = null;
+        const ftHome = apiMatch.score?.fullTime?.home;
+        const ftAway = apiMatch.score?.fullTime?.away;
+        if ((newStatus === 'finished' || newStatus === 'live') && ftHome != null && ftAway != null) {
+          newScore = { home: ftHome, away: ftAway };
+        }
+
+        const newMatch = {
+          id: newId,
+          home: homeCode,
+          away: awayCode,
+          kickoff: apiMatch.utcDate,
+          stage: internalStage,
+          group: null, // knockout match'ai neturi grupės
+          status: newStatus,
+          actualScore: newScore,
+        };
+
+        const ref = doc(db, 'matches', newId);
+        batch.set(ref, newMatch);
+        stats.created++;
+        continue;
+      }
+
+      // Grupių etapo match'as kurio nėra DB - turbūt admin'as neseedino g01-g72
       stats.unmatched.push(`${apiMatch.homeTeam?.name} vs ${apiMatch.awayTeam?.name} (nerasta mūsų DB)`);
       continue;
     }
@@ -529,7 +575,7 @@ export async function syncResultsFromAPI() {
     }
   }
 
-  if (stats.updated > 0) {
+  if (stats.updated > 0 || stats.created > 0) {
     await batch.commit();
   }
 
