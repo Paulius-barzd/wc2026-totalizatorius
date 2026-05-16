@@ -9,7 +9,7 @@ import {
   registerUser, loginUser, logoutUser, onAuthChange,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
-  updateMatch, seedDemoMatches,
+  updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches,
 } from './firebase';
 
 // ============================================================
@@ -17,22 +17,66 @@ import {
 // ============================================================
 
 const teamsByCode = {
+  // === Group A ===
   MEX: { name: 'Meksika', code: 'mx' },
-  CAN: { name: 'Kanada', code: 'ca' },
-  USA: { name: 'Jungtinės Amerikos Valstijos', code: 'us' },
-  POR: { name: 'Portugalija', code: 'pt' },
+  RSA: { name: 'Pietų Afrika', code: 'za' },
   KOR: { name: 'Pietų Korėja', code: 'kr' },
-  ESP: { name: 'Ispanija', code: 'es' },
-  GER: { name: 'Vokietija', code: 'de' },
+  CZE: { name: 'Čekija', code: 'cz' },
+  // === Group B ===
+  CAN: { name: 'Kanada', code: 'ca' },
+  SUI: { name: 'Šveicarija', code: 'ch' },
+  QAT: { name: 'Kataras', code: 'qa' },
+  BIH: { name: 'Bosnija ir Hercegovina', code: 'ba' },
+  // === Group C ===
   BRA: { name: 'Brazilija', code: 'br' },
-  ARG: { name: 'Argentina', code: 'ar' },
-  FRA: { name: 'Prancūzija', code: 'fr' },
-  ENG: { name: 'Anglija', code: 'gb-eng' },
+  MAR: { name: 'Marokas', code: 'ma' },
+  HAI: { name: 'Haitis', code: 'ht' },
+  SCO: { name: 'Škotija', code: 'gb-sct' },
+  // === Group D ===
+  USA: { name: 'Jungtinės Amerikos Valstijos', code: 'us' },
+  PAR: { name: 'Paragvajus', code: 'py' },
+  AUS: { name: 'Australija', code: 'au' },
+  TUR: { name: 'Turkija', code: 'tr' },
+  // === Group E ===
+  GER: { name: 'Vokietija', code: 'de' },
+  CUW: { name: 'Kiurasao', code: 'cw' },
+  CIV: { name: 'Dramblio Kaulo Krantas', code: 'ci' },
+  ECU: { name: 'Ekvadoras', code: 'ec' },
+  // === Group F ===
   NED: { name: 'Nyderlandai', code: 'nl' },
-  CRO: { name: 'Kroatija', code: 'hr' },
   JPN: { name: 'Japonija', code: 'jp' },
-  ITA: { name: 'Italija', code: 'it' },
+  SWE: { name: 'Švedija', code: 'se' },
+  TUN: { name: 'Tunisas', code: 'tn' },
+  // === Group G ===
   BEL: { name: 'Belgija', code: 'be' },
+  EGY: { name: 'Egiptas', code: 'eg' },
+  IRN: { name: 'Iranas', code: 'ir' },
+  NZL: { name: 'Naujoji Zelandija', code: 'nz' },
+  // === Group H ===
+  ESP: { name: 'Ispanija', code: 'es' },
+  CPV: { name: 'Žaliasis Kyšulys', code: 'cv' },
+  KSA: { name: 'Saudo Arabija', code: 'sa' },
+  URU: { name: 'Urugvajus', code: 'uy' },
+  // === Group I ===
+  FRA: { name: 'Prancūzija', code: 'fr' },
+  SEN: { name: 'Senegalas', code: 'sn' },
+  NOR: { name: 'Norvegija', code: 'no' },
+  IRQ: { name: 'Irakas', code: 'iq' },
+  // === Group J ===
+  ARG: { name: 'Argentina', code: 'ar' },
+  ALG: { name: 'Alžyras', code: 'dz' },
+  AUT: { name: 'Austrija', code: 'at' },
+  JOR: { name: 'Jordanija', code: 'jo' },
+  // === Group K ===
+  POR: { name: 'Portugalija', code: 'pt' },
+  COD: { name: 'Kongo DR', code: 'cd' },
+  UZB: { name: 'Uzbekistanas', code: 'uz' },
+  COL: { name: 'Kolumbija', code: 'co' },
+  // === Group L ===
+  ENG: { name: 'Anglija', code: 'gb-eng' },
+  CRO: { name: 'Kroatija', code: 'hr' },
+  GHA: { name: 'Gana', code: 'gh' },
+  PAN: { name: 'Panama', code: 'pa' },
 };
 
 const groups = [
@@ -67,7 +111,26 @@ const formatKickoff = (iso) => {
   const d = new Date(iso);
   const days = ['Sek', 'Pir', 'Ant', 'Tre', 'Ket', 'Pen', 'Šeš'];
   const months = ['saus', 'vas', 'kov', 'bal', 'geg', 'birž', 'liep', 'rugp', 'rugs', 'spal', 'lapk', 'gruod'];
-  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} · ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
+  // Naudoti Intl.DateTimeFormat su Europe/Vilnius - visada Lietuvos laiku,
+  // nepriklausomai nuo naršyklės lokalios juostos
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Vilnius',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+
+  const get = (type) => parts.find((p) => p.type === type)?.value || '';
+  const wMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const wkd = wMap[get('weekday')] ?? 0;
+  const day = parseInt(get('day'), 10);
+  const month = parseInt(get('month'), 10) - 1;
+
+  return `${days[wkd]}, ${day} ${months[month]} · ${get('hour')}:${get('minute')}`;
 };
 
 const timeUntil = (iso) => {
@@ -183,19 +246,34 @@ const FLAGS = {
 // ============================================================
 
 const Flag = ({ code, className = 'w-8 h-6' }) => {
-  const flagContent = FLAGS[code];
-  if (!flagContent) {
+  if (!code) {
     return (
       <div className={`${className} bg-[#1a1410]/10 rounded-sm flex items-center justify-center`}>
-        <span className="text-[8px] font-bold uppercase text-[#6b6359]">{code}</span>
+        <span className="text-[8px] font-bold uppercase text-[#6b6359]">?</span>
       </div>
     );
   }
+  const flagContent = FLAGS[code];
+  // Inline SVG (16 esamos vėliavos) - greitas, neturi network requestų
+  if (flagContent) {
+    return (
+      <span className={`inline-block overflow-hidden flag-img ${className}`} style={{ verticalAlign: 'middle' }}>
+        <svg viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" style={{ display: 'block' }}>
+          {flagContent}
+        </svg>
+      </span>
+    );
+  }
+  // Fallback: flagcdn.com (32 naujos vėliavos iš WC 2026)
   return (
-    <span className={`inline-block overflow-hidden flag-img ${className}`} style={{ verticalAlign: 'middle' }}>
-      <svg viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" style={{ display: 'block' }}>
-        {flagContent}
-      </svg>
+    <span className={`inline-block overflow-hidden rounded-sm ${className}`} style={{ verticalAlign: 'middle' }}>
+      <img
+        src={`https://flagcdn.com/${code}.svg`}
+        alt={code}
+        className="w-full h-full"
+        style={{ display: 'block', objectFit: 'cover' }}
+        loading="lazy"
+      />
     </span>
   );
 };
@@ -866,10 +944,10 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
           { id: 'all', label: 'Visos' },
           { id: 'upcoming', label: 'Būsimos' },
           { id: 'finished', label: 'Baigtos' },
-          { id: 'A', label: 'Grupė A' },
-          { id: 'B', label: 'Grupė B' },
-          { id: 'C', label: 'Grupė C' },
-          { id: 'D', label: 'Grupė D' },
+          { id: 'A', label: 'A' }, { id: 'B', label: 'B' }, { id: 'C', label: 'C' },
+          { id: 'D', label: 'D' }, { id: 'E', label: 'E' }, { id: 'F', label: 'F' },
+          { id: 'G', label: 'G' }, { id: 'H', label: 'H' }, { id: 'I', label: 'I' },
+          { id: 'J', label: 'J' }, { id: 'K', label: 'K' }, { id: 'L', label: 'L' },
         ].map((f) => (
           <button key={f.id} onClick={() => setFilter(f.id)}
             className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
@@ -1447,6 +1525,32 @@ const AdminScreen = ({ matches, onClose }) => {
     }
   };
 
+  const handleSeedWC2026 = async () => {
+    if (!confirm('Sukurti visas 72 PFČ 2026 grupių etapo rungtynes su tikrais oficialiais duomenimis?\n\nLaikai - Lietuvos laiku. Esami g01-g72 dokumentai bus perrašyti.')) return;
+    setSeeding(true);
+    try {
+      const count = await seedWC2026Matches();
+      alert(`Sukurta ${count} tikrų PFČ 2026 grupių etapo rungtynių!`);
+    } catch (err) {
+      alert('Klaida: ' + err.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleDeleteDemo = async () => {
+    if (!confirm('Ištrinti visas 8 demo rungtynes (m1-m8)?\n\nTai nepalies tikrų PFČ 2026 rungtynių (g01-g72).')) return;
+    setSeeding(true);
+    try {
+      await deleteDemoMatches();
+      alert('Demo rungtynės ištrintos.');
+    } catch (err) {
+      alert('Klaida: ' + err.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   const handleStartEdit = (match) => {
     setEditingMatch(match.id);
     setEditForm({
@@ -1483,16 +1587,38 @@ const AdminScreen = ({ matches, onClose }) => {
         </div>
       </div>
 
-      {matches.length === 0 && (
-        <div className="card-light rounded-xl p-5">
-          <p className="text-sm text-[#1a1410] font-semibold mb-2">Nėra rungtynių</p>
-          <p className="text-xs text-[#6b6359] mb-3">Sukurk 8 demo rungtynes testavimui:</p>
+      {/* Setup veiksmai - visada matomi */}
+      <div className="card-light rounded-xl p-4 space-y-3">
+        <div>
+          <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-1">Rungtynių valdymas</div>
+          <p className="text-[11px] text-[#6b6359]">Tikros oficialios PFČ 2026 rungtynės - 72 grupių etapas. Knockout etapas pridedamas rankiniu būdu po grupių.</p>
+        </div>
+
+        <button onClick={handleSeedWC2026} disabled={seeding}
+          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
+          {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
+          Įkelti PFČ 2026 rungtynes (72)
+        </button>
+
+        <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSeed} disabled={seeding}
             style={{ backgroundColor: '#0a2c4e', color: '#ffffff' }}
-            className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
-            {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
-            Sukurti demo rungtynes
+            className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
+            Sukurti 8 demo
           </button>
+          <button onClick={handleDeleteDemo} disabled={seeding}
+            style={{ backgroundColor: '#c8302e', color: '#ffffff' }}
+            className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
+            Ištrinti demo
+          </button>
+        </div>
+      </div>
+
+      {matches.length === 0 && (
+        <div className="card-light rounded-xl p-5">
+          <p className="text-sm text-[#1a1410] font-semibold">Nėra rungtynių</p>
+          <p className="text-xs text-[#6b6359] mt-1">Paspausk "Įkelti PFČ 2026 rungtynes" viršuje.</p>
         </div>
       )}
 
