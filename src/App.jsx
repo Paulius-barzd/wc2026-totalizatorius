@@ -9,7 +9,7 @@ import {
   registerUser, loginUser, logoutUser, onAuthChange,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
-  updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches,
+  updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches, syncResultsFromAPI,
 } from './firebase';
 
 // ============================================================
@@ -1551,6 +1551,34 @@ const AdminScreen = ({ matches, onClose }) => {
     }
   };
 
+  const handleSyncFromAPI = async () => {
+    const apiKey = import.meta.env.VITE_FOOTBALL_DATA_API_KEY;
+    if (!apiKey) {
+      alert('API raktas nesukonfigūruotas.\n\nKad pridėti:\n1. Užsiregistruok football-data.org\n2. Netlify Site → Environment Variables → pridėk VITE_FOOTBALL_DATA_API_KEY\n3. Re-deploy site');
+      return;
+    }
+    setSeeding(true);
+    try {
+      const stats = await syncResultsFromAPI(apiKey);
+      let msg = `Sinchronizacija baigta!\n\n` +
+        `🔄 Iš API: ${stats.total} rungtynių\n` +
+        `✅ Suderinta: ${stats.matched}\n` +
+        `📝 Atnaujinta: ${stats.updated}\n` +
+        `⏸ Be pakeitimų: ${stats.skipped}`;
+      if (stats.unmatched.length > 0) {
+        const shown = stats.unmatched.slice(0, 5).join('\n  • ');
+        msg += `\n\n⚠️ Nepriderinta (${stats.unmatched.length}):\n  • ${shown}`;
+        if (stats.unmatched.length > 5) msg += `\n  • ... ir dar ${stats.unmatched.length - 5}`;
+        msg += `\n\n(Greičiausiai knockout etapo rungtynės - jose komandos dar nežinomos)`;
+      }
+      alert(msg);
+    } catch (err) {
+      alert('Klaida: ' + err.message + '\n\nGali tiesiog įvesti rezultatus rankiniu būdu žemiau.');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   const handleStartEdit = (match) => {
     setEditingMatch(match.id);
     setEditForm({
@@ -1587,6 +1615,28 @@ const AdminScreen = ({ matches, onClose }) => {
         </div>
       </div>
 
+      {/* API sinchronizavimas - svarbiausias mygtukas */}
+      <div className="card-light rounded-xl p-4 space-y-3" style={{ borderLeft: '3px solid #0e6b47' }}>
+        <div>
+          <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-1 flex items-center gap-2">
+            <Radio className="w-4 h-4 text-[#0e6b47]" />
+            Rezultatų sinchronizacija
+          </div>
+          <p className="text-[11px] text-[#6b6359]">Paspausk po kiekvieno match dieną - automatiškai atnaujina baigtas/vykstančias rungtynes iš oficialaus FIFA tiekėjo (football-data.org).</p>
+        </div>
+
+        <button onClick={handleSyncFromAPI} disabled={seeding}
+          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
+          {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
+          Atnaujinti rezultatus iš API
+        </button>
+
+        <p className="text-[10px] text-[#6b6359]">
+          💡 Jei API neveikia - rankiniu būdu žemiau gali bet kada įvesti rezultatą.
+        </p>
+      </div>
+
       {/* Setup veiksmai - visada matomi */}
       <div className="card-light rounded-xl p-4 space-y-3">
         <div>
@@ -1595,7 +1645,7 @@ const AdminScreen = ({ matches, onClose }) => {
         </div>
 
         <button onClick={handleSeedWC2026} disabled={seeding}
-          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          style={{ backgroundColor: '#0a2c4e', color: '#ffffff' }}
           className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Įkelti PFČ 2026 rungtynes (72)
@@ -1603,7 +1653,7 @@ const AdminScreen = ({ matches, onClose }) => {
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSeed} disabled={seeding}
-            style={{ backgroundColor: '#0a2c4e', color: '#ffffff' }}
+            style={{ backgroundColor: '#6b6359', color: '#ffffff' }}
             className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
             Sukurti 8 demo
           </button>
