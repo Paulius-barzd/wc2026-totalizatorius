@@ -107,8 +107,10 @@ export function saveTournamentBet(uid, data) {
   return setDoc(doc(db, 'tournamentBets', uid), {
     userId: uid,
     champion: data.champion || null,
+    bestPlayer: data.bestPlayer || '',
     topScorer: data.topScorer || '',
-    groupWinners: data.groupWinners || {},
+    bestGoalkeeper: data.bestGoalkeeper || '',
+    bestYoungPlayer: data.bestYoungPlayer || '',
     submittedAt: serverTimestamp(),
   });
 }
