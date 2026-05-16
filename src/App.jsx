@@ -304,24 +304,27 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
   const isLocked = match.status !== 'upcoming';
   const tu = timeUntil(match.kickoff);
 
-  // Lokalus state - kas dabar redaguojama (gali skirtis nuo išsaugotos prognozės)
+  // Lokalus state - kas dabar redaguojama
   const [localPred, setLocalPred] = useState({
     home: prediction?.home ?? 0,
     away: prediction?.away ?? 0,
   });
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  // Edit mode: jei nėra išsaugotos prognozės, iškart edit mode
+  const [isEditing, setIsEditing] = useState(!prediction);
 
   // Sinchronizuoti lokalų state kai prediction iš Firestore pasikeičia
   useEffect(() => {
     if (prediction) {
       setLocalPred({ home: prediction.home, away: prediction.away });
+    } else {
+      setIsEditing(true);
     }
   }, [prediction?.home, prediction?.away]);
 
-  // Ar yra neišsaugotų pakeitimų?
   const hasChanges = !prediction
-    ? true // Nėra išsaugotos prognozės - mygtukas aktyvus
+    ? true
     : prediction.home !== localPred.home || prediction.away !== localPred.away;
 
   let pointsResult = null;
@@ -335,21 +338,22 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
     try {
       await onUpdatePrediction(match.id, localPred);
       setJustSaved(true);
+      setIsEditing(false); // Po išsaugojimo - grįžti į view mode
       setTimeout(() => setJustSaved(false), 2000);
     } finally {
       setSaving(false);
     }
   };
 
-  // Mygtuko būsenos
-  const getButtonState = () => {
-    if (saving) return { text: 'Saugoma...', icon: 'spinner', bg: '#0e6b47', color: '#ffffff', disabled: true };
-    if (justSaved) return { text: 'Išsaugota', icon: 'check', bg: '#0e6b47', color: '#ffffff', disabled: true };
-    if (!hasChanges && prediction) return { text: 'Spėjimas išsaugotas', icon: 'check', bg: '#f0ebe1', color: '#6b6359', disabled: true };
-    if (prediction) return { text: 'Atnaujinti spėjimą', icon: null, bg: '#0e6b47', color: '#ffffff', disabled: false };
-    return { text: 'Patvirtinti spėjimą', icon: null, bg: '#0e6b47', color: '#ffffff', disabled: false };
+  const handleCancel = () => {
+    if (prediction) {
+      setLocalPred({ home: prediction.home, away: prediction.away });
+    }
+    setIsEditing(false);
   };
-  const btn = getButtonState();
+
+  // Input'ų disabled būsena
+  const inputsDisabled = isLocked || saving || (!isEditing && prediction);
 
   return (
     <div className="card-light rounded-xl p-4">
@@ -398,19 +402,43 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
             <div className="flex items-center justify-center gap-3 mb-3">
               <ScoreInput value={localPred.home}
                 onChange={(v) => setLocalPred({ ...localPred, home: v })}
-                disabled={isLocked || saving} />
+                disabled={inputsDisabled} />
               <span className="text-[#6b6359] font-mono">:</span>
               <ScoreInput value={localPred.away}
                 onChange={(v) => setLocalPred({ ...localPred, away: v })}
-                disabled={isLocked || saving} />
+                disabled={inputsDisabled} />
             </div>
-            <button onClick={handleSave} disabled={btn.disabled}
-              style={{ backgroundColor: btn.bg, color: btn.color }}
-              className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              {btn.icon === 'spinner' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {btn.icon === 'check' && <CheckCircle2 className="w-3.5 h-3.5" />}
-              {btn.text}
-            </button>
+
+            {/* VIEW MODE: tik Redaguoti spėjimą mygtukas */}
+            {!isEditing && prediction && (
+              <button onClick={() => setIsEditing(true)}
+                style={{ backgroundColor: '#f0ebe1', color: '#0a2c4e', border: '1px solid rgba(10, 44, 78, 0.15)' }}
+                className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:opacity-80 transition-all">
+                Redaguoti spėjimą
+              </button>
+            )}
+
+            {/* EDIT MODE: Save (+ Atšaukti jei jau buvo prognozė) */}
+            {(isEditing || !prediction) && (
+              <div className="flex gap-2">
+                {prediction && (
+                  <button onClick={handleCancel} disabled={saving}
+                    style={{ backgroundColor: '#ffffff', color: '#6b6359', border: '1px solid rgba(20,17,16,0.15)' }}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-[#1a1410]/5 transition-all">
+                    Atšaukti
+                  </button>
+                )}
+                <button onClick={handleSave} disabled={!hasChanges || saving || justSaved}
+                  style={(!hasChanges || justSaved) && !saving
+                    ? { backgroundColor: '#f0ebe1', color: '#6b6359' }
+                    : { backgroundColor: '#0e6b47', color: '#ffffff' }}
+                  className={`${prediction ? 'flex-1' : 'w-full'} py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all`}>
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {justSaved && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {saving ? 'Saugoma...' : justSaved ? 'Išsaugota' : prediction ? 'Atnaujinti' : 'Patvirtinti spėjimą'}
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -667,7 +695,7 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
 // APP SCREENS
 // ============================================================
 
-const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScreen }) => {
+const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScreen, onUpdatePrediction }) => {
   const sortedUsers = [...usersWithPoints].sort((a, b) => b.points - a.points);
   const me = sortedUsers.find((u) => u.uid === userProfile.uid) || userProfile;
   const myRank = sortedUsers.findIndex((u) => u.uid === userProfile.uid) + 1;
@@ -739,7 +767,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
           </div>
           <div className="space-y-3">
             {upcomingMatches.map((m) => (
-              <MatchCard key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={() => setScreen('matches')} />
+              <MatchCard key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} />
             ))}
           </div>
         </div>
@@ -1375,7 +1403,7 @@ export default function App() {
 
         <main className="flex-1 px-4 pt-4">
           {screen === 'home' && <HomeScreen userProfile={userProfile} usersWithPoints={usersWithPoints}
-            matches={matches} predictions={predictions} setScreen={setScreen} />}
+            matches={matches} predictions={predictions} setScreen={setScreen} onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'matches' && <MatchesScreen matches={matches} predictions={predictions}
             onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'tournament' && <TournamentScreen userProfile={userProfile}
