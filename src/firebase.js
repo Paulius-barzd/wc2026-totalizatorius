@@ -371,6 +371,7 @@ const API_NAME_TO_CODE = {
   // Group H
   'Spain': 'ESP',
   'Cape Verde': 'CPV',
+  'Cape Verde Islands': 'CPV',
   'Saudi Arabia': 'KSA',
   'Uruguay': 'URU',
   // Group I
