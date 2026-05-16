@@ -1552,14 +1552,9 @@ const AdminScreen = ({ matches, onClose }) => {
   };
 
   const handleSyncFromAPI = async () => {
-    const apiKey = import.meta.env.VITE_FOOTBALL_DATA_API_KEY;
-    if (!apiKey) {
-      alert('API raktas nesukonfigūruotas.\n\nKad pridėti:\n1. Užsiregistruok football-data.org\n2. Netlify Site → Environment Variables → pridėk VITE_FOOTBALL_DATA_API_KEY\n3. Re-deploy site');
-      return;
-    }
     setSeeding(true);
     try {
-      const stats = await syncResultsFromAPI(apiKey);
+      const stats = await syncResultsFromAPI();
       let msg = `Sinchronizacija baigta!\n\n` +
         `🔄 Iš API: ${stats.total} rungtynių\n` +
         `✅ Suderinta: ${stats.matched}\n` +
