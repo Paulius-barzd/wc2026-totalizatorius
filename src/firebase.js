@@ -43,7 +43,7 @@ const AVATAR_COLORS = [
   '#2563eb', '#dd6b20', '#0891b2', '#7c3aed',
 ];
 
-export async function registerUser(email, password, username, fullName) {
+export async function registerUser(email, password, username, fullName, companyId, companyName) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const uid = cred.user.uid;
 
@@ -60,6 +60,8 @@ export async function registerUser(email, password, username, fullName) {
     fullName,
     avatarLetter,
     avatarColor,
+    companyId: companyId || null, // null = "Be įmonės"
+    companyName: companyName || null,
     isAdmin: false, // Admin teises galima suteikti tik per Firebase Console
     createdAt: serverTimestamp(),
   });
@@ -153,6 +155,16 @@ export function listenToUsers(callback) {
     const users = [];
     snap.forEach((d) => users.push({ id: d.id, ...d.data() }));
     callback(users);
+  });
+}
+
+export function listenToCompanies(callback) {
+  return onSnapshot(collection(db, 'companies'), (snap) => {
+    const companies = [];
+    snap.forEach((d) => companies.push({ id: d.id, ...d.data() }));
+    // Rūšiuoti pagal pavadinimą
+    companies.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'lt'));
+    callback(companies);
   });
 }
 
