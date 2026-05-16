@@ -8,7 +8,7 @@ import {
 import {
   registerUser, loginUser, logoutUser, onAuthChange,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
-  listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers,
+  listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
   updateMatch, seedDemoMatches,
 } from './firebase';
 
@@ -609,8 +609,8 @@ const LoginScreen = ({ onSwitchToRegister }) => {
   );
 };
 
-const RegisterScreen = ({ onSwitchToLogin }) => {
-  const [form, setForm] = useState({ username: '', fullName: '', email: '', password: '' });
+const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
+  const [form, setForm] = useState({ username: '', fullName: '', email: '', password: '', companyChoice: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -621,6 +621,10 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
   const handleRegister = async () => {
     if (!form.username || !form.fullName || !form.email || !form.password) {
       setError('Užpildyk visus laukus');
+      return;
+    }
+    if (!form.companyChoice) {
+      setError('Pasirink įmonę (arba "Be įmonės")');
       return;
     }
     if (form.password.length < 6) {
@@ -634,7 +638,17 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
     setError('');
     setLoading(true);
     try {
-      await registerUser(form.email, form.password, form.username, form.fullName);
+      // companyChoice: "none" = Be įmonės, kitaip = company.id
+      let companyId = null;
+      let companyName = null;
+      if (form.companyChoice !== 'none') {
+        const company = companies.find((c) => c.id === form.companyChoice);
+        if (company) {
+          companyId = company.id;
+          companyName = company.name;
+        }
+      }
+      await registerUser(form.email, form.password, form.username, form.fullName, companyId, companyName);
       // onAuthChange auto-pakeis ekraną
     } catch (err) {
       setError(translateAuthError(err.code) || err.message);
@@ -669,6 +683,27 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
               value={form.email} onChange={updateField('email')} autoComplete="email" />
             <FormField label="Slaptažodis" type="password" placeholder="Bent 6 simboliai"
               value={form.password} onChange={updateField('password')} autoComplete="new-password" />
+
+            {/* Company dropdown */}
+            <div>
+              <label className="block text-[10px] font-bold text-[#6b6359] uppercase tracking-wider mb-1">Įmonė</label>
+              <select
+                value={form.companyChoice}
+                onChange={(e) => updateField('companyChoice')(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-white border border-[#1a1410]/15 text-sm text-[#1a1410] focus:outline-none focus:border-[#0e6b47] disabled:opacity-50"
+                disabled={loading}>
+                <option value="" disabled>-- Pasirinkti įmonę --</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                <option value="none">Be įmonės</option>
+              </select>
+              {companies.length === 0 && (
+                <p className="text-[10px] text-[#6b6359] mt-1">
+                  Įmonių dar nėra. Gali pasirinkti "Be įmonės" arba palaukti kol admin'as pridės.
+                </p>
+              )}
+            </div>
           </div>
 
           <button onClick={handleRegister} disabled={loading}
@@ -952,7 +987,49 @@ const TournamentScreen = ({ userProfile, tournamentBet, setTournamentBet }) => {
 };
 
 const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
-  const sortedUsers = [...usersWithPoints].sort((a, b) => b.points - a.points);
+  const [tab, setTab] = useState('overall'); // 'overall' | 'company' | 'companies'
+
+  const sortedUsers = useMemo(
+    () => [...usersWithPoints].sort((a, b) => b.points - a.points),
+    [usersWithPoints]
+  );
+
+  // Mano įmonės dalyviai
+  const myCompanyUsers = useMemo(() => {
+    if (!userProfile.companyId) return [];
+    return sortedUsers.filter((u) => u.companyId === userProfile.companyId);
+  }, [sortedUsers, userProfile.companyId]);
+
+  // Įmonių statistika (agreguotas vidurkis)
+  const companyStats = useMemo(() => {
+    const stats = {};
+    sortedUsers.forEach((u) => {
+      if (!u.companyId) return; // praleisti "Be įmonės" vartotojus
+      if (!stats[u.companyId]) {
+        stats[u.companyId] = {
+          companyId: u.companyId,
+          companyName: u.companyName || 'Nežinoma įmonė',
+          members: [],
+          totalPoints: 0,
+        };
+      }
+      stats[u.companyId].members.push(u);
+      stats[u.companyId].totalPoints += u.points || 0;
+    });
+    const arr = Object.values(stats).map((s) => ({
+      ...s,
+      memberCount: s.members.length,
+      avgPoints: s.members.length > 0 ? s.totalPoints / s.members.length : 0,
+    }));
+    arr.sort((a, b) => b.avgPoints - a.avgPoints);
+    return arr;
+  }, [sortedUsers]);
+
+  const tabs = [
+    { id: 'overall', label: 'Bendra' },
+    { id: 'company', label: 'Mano įmonė' },
+    { id: 'companies', label: 'Įmonės' },
+  ];
 
   if (sortedUsers.length === 0) {
     return (
@@ -962,69 +1039,172 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
     );
   }
 
-  return (
-    <div className="space-y-4 pb-24">
-      <div>
-        <h1 className="font-display text-3xl text-[#1a1410] mb-1">LYDERLENTĖ</h1>
-        <p className="text-sm text-[#6b6359]">{sortedUsers.length} dalyvių · atnaujinama tiesiogiai</p>
+  const renderUserRow = (u, i, isMe) => (
+    <div key={u.uid}
+      className={`flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0 ${isMe ? 'bg-[#0e6b47]/5' : ''}`}>
+      <div className="font-display text-sm w-6 text-center text-[#6b6359]">{i + 1}</div>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm"
+        style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
+        {u.avatarLetter}
       </div>
-
-      {sortedUsers.length >= 3 && (
-        <div className="grid grid-cols-3 gap-2 items-end">
-          {[sortedUsers[1], sortedUsers[0], sortedUsers[2]].map((u, idx) => {
-            const realIdx = idx === 0 ? 1 : idx === 1 ? 0 : 2;
-            const heights = ['h-20', 'h-28', 'h-16'];
-            const colors = ['#94806f', '#b8860b', '#a85a2a'];
-            return (
-              <div key={u.uid} className="flex flex-col items-center">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center font-display text-lg mb-2 bg-white"
-                  style={{ color: u.avatarColor, border: `2px solid ${u.avatarColor}` }}>
-                  {u.avatarLetter}
-                </div>
-                <div className="text-xs font-bold text-[#1a1410] mb-1 truncate w-full text-center">{u.username}</div>
-                <div className="font-mono text-xs text-[#0e6b47] mb-2">{u.points} tšk.</div>
-                <div className={`${heights[idx]} w-full rounded-t-lg flex items-start justify-center pt-2 font-display text-2xl`}
-                  style={{
-                    background: `linear-gradient(180deg, ${colors[realIdx]}30 0%, ${colors[realIdx]}10 100%)`,
-                    color: colors[realIdx],
-                    border: `1px solid ${colors[realIdx]}30`,
-                    borderBottom: 'none'
-                  }}>
-                  {realIdx + 1}
-                </div>
-              </div>
-            );
-          })}
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-semibold truncate ${isMe ? 'text-[#0e6b47]' : 'text-[#1a1410]'}`}>
+          {u.username} {isMe && <span className="text-[10px] ml-1 opacity-70">(tu)</span>}
         </div>
-      )}
+        <div className="text-[10px] text-[#6b6359] flex items-center gap-2 truncate">
+          {u.companyName ? (
+            <span className="truncate">{u.companyName}</span>
+          ) : (
+            <span className="opacity-60">Be įmonės</span>
+          )}
+          <span className="flex items-center gap-0.5"><Flame className="w-2.5 h-2.5" />{u.streak || 0}</span>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="font-mono font-bold text-[#0e6b47]">{u.points}</div>
+        <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">tšk.</div>
+      </div>
+    </div>
+  );
 
-      <div className="card-light rounded-xl overflow-hidden">
-        {sortedUsers.map((u, i) => {
-          const isMe = u.uid === userProfile.uid;
+  const renderPodium = (users) => {
+    if (users.length < 3) return null;
+    return (
+      <div className="grid grid-cols-3 gap-2 items-end">
+        {[users[1], users[0], users[2]].map((u, idx) => {
+          const realIdx = idx === 0 ? 1 : idx === 1 ? 0 : 2;
+          const heights = ['h-20', 'h-28', 'h-16'];
+          const colors = ['#94806f', '#b8860b', '#a85a2a'];
           return (
-            <div key={u.uid}
-              className={`flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0 ${isMe ? 'bg-[#0e6b47]/5' : ''}`}>
-              <div className="font-display text-sm w-6 text-center text-[#6b6359]">{i + 1}</div>
-              <div className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm"
-                style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
+            <div key={u.uid} className="flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center font-display text-lg mb-2 bg-white"
+                style={{ color: u.avatarColor, border: `2px solid ${u.avatarColor}` }}>
                 {u.avatarLetter}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className={`text-sm font-semibold truncate ${isMe ? 'text-[#0e6b47]' : 'text-[#1a1410]'}`}>
-                  {u.username} {isMe && <span className="text-[10px] ml-1 opacity-70">(tu)</span>}
-                </div>
-                <div className="text-[10px] text-[#6b6359] flex items-center gap-2">
-                  <span className="flex items-center gap-0.5"><Flame className="w-2.5 h-2.5" />{u.streak || 0}</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-mono font-bold text-[#0e6b47]">{u.points}</div>
-                <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">tšk.</div>
+              <div className="text-xs font-bold text-[#1a1410] mb-1 truncate w-full text-center">{u.username}</div>
+              <div className="font-mono text-xs text-[#0e6b47] mb-2">{u.points} tšk.</div>
+              <div className={`${heights[idx]} w-full rounded-t-lg flex items-start justify-center pt-2 font-display text-2xl`}
+                style={{
+                  background: `linear-gradient(180deg, ${colors[realIdx]}30 0%, ${colors[realIdx]}10 100%)`,
+                  color: colors[realIdx],
+                  border: `1px solid ${colors[realIdx]}30`,
+                  borderBottom: 'none'
+                }}>
+                {realIdx + 1}
               </div>
             </div>
           );
         })}
       </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 pb-24">
+      <div>
+        <h1 className="font-display text-3xl text-[#1a1410] mb-1">LYDERLENTĖ</h1>
+        <p className="text-sm text-[#6b6359]">
+          {tab === 'overall' && `${sortedUsers.length} dalyvių · atnaujinama tiesiogiai`}
+          {tab === 'company' && userProfile.companyName && `${myCompanyUsers.length} dalyvių iš ${userProfile.companyName}`}
+          {tab === 'company' && !userProfile.companyName && 'Tu nepriklausai įmonei'}
+          {tab === 'companies' && `${companyStats.length} įmonių · vidurkis vienam dalyviui`}
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl bg-[#1a1410]/5">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={tab === t.id ? { backgroundColor: '#ffffff', color: '#1a1410' } : { color: '#6b6359' }}
+            className="flex-1 py-2 px-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all">
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* TAB: BENDRA */}
+      {tab === 'overall' && (
+        <>
+          {renderPodium(sortedUsers)}
+          <div className="card-light rounded-xl overflow-hidden">
+            {sortedUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
+          </div>
+        </>
+      )}
+
+      {/* TAB: MANO ĮMONĖ */}
+      {tab === 'company' && (
+        <>
+          {!userProfile.companyId ? (
+            <div className="card-light rounded-xl p-6 text-center">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[#1a1410]/5 flex items-center justify-center">
+                <Settings className="w-6 h-6 text-[#6b6359]" />
+              </div>
+              <p className="text-sm font-bold text-[#1a1410] mb-1">Tu nepriklausai įmonei</p>
+              <p className="text-xs text-[#6b6359]">Susisiek su admin'u, kad priskirtų tave įmonei.</p>
+            </div>
+          ) : (
+            <>
+              <div className="card-light rounded-xl p-3 flex items-center gap-2">
+                <div className="w-2 h-8 rounded-full bg-[#0e6b47]"></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-[#6b6359] uppercase tracking-wider">Tavo įmonė</div>
+                  <div className="font-display text-base text-[#1a1410] truncate">{userProfile.companyName}</div>
+                </div>
+              </div>
+              {renderPodium(myCompanyUsers)}
+              <div className="card-light rounded-xl overflow-hidden">
+                {myCompanyUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* TAB: ĮMONĖS */}
+      {tab === 'companies' && (
+        <>
+          <div className="rounded-xl p-3 bg-[#0a2c4e]/5 border border-[#0a2c4e]/15">
+            <p className="text-[11px] text-[#0a2c4e] leading-relaxed">
+              <span className="font-bold">Kaip skaičiuojama:</span> įmonės rikiuojamos pagal taškų <span className="font-bold">vidurkį vienam dalyviui</span>.
+              Taip mažos įmonės gali sąžiningai konkuruoti su didelėmis - dydis nesuteikia pranašumo.
+            </p>
+          </div>
+
+          {companyStats.length === 0 ? (
+            <div className="card-light rounded-xl p-6 text-center">
+              <p className="text-sm text-[#6b6359]">Dar nėra įmonių su dalyviais</p>
+            </div>
+          ) : (
+            <div className="card-light rounded-xl overflow-hidden">
+              {companyStats.map((c, i) => {
+                const isMyCompany = c.companyId === userProfile.companyId;
+                return (
+                  <div key={c.companyId}
+                    className={`flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0 ${isMyCompany ? 'bg-[#0e6b47]/5' : ''}`}>
+                    <div className="font-display text-sm w-6 text-center text-[#6b6359]">{i + 1}</div>
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display text-sm bg-[#0a2c4e]/10 text-[#0a2c4e]">
+                      {(c.companyName || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-semibold truncate ${isMyCompany ? 'text-[#0e6b47]' : 'text-[#1a1410]'}`}>
+                        {c.companyName} {isMyCompany && <span className="text-[10px] ml-1 opacity-70">(tavo)</span>}
+                      </div>
+                      <div className="text-[10px] text-[#6b6359]">
+                        {c.memberCount} {c.memberCount === 1 ? 'dalyvis' : (c.memberCount < 10 ? 'dalyviai' : 'dalyvių')} · {c.totalPoints} tšk. iš viso
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-[#0e6b47]">{c.avgPoints.toFixed(1)}</div>
+                      <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">vid.</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
@@ -1057,8 +1237,17 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, onL
         <h2 className="font-display text-2xl text-[#1a1410]">{userProfile.username}</h2>
         <p className="text-sm text-[#1a1410] mt-1">{userProfile.fullName}</p>
         <p className="text-xs text-[#6b6359]">{userProfile.email}</p>
+
+        {/* Įmonės informacija */}
+        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0a2c4e]/8 border border-[#0a2c4e]/20">
+          <Trophy className="w-3 h-3 text-[#0a2c4e]" />
+          <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+            {userProfile.companyName || 'Be įmonės'}
+          </span>
+        </div>
+
         {userProfile.isAdmin && (
-          <div className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full bg-[#0a2c4e]/10 border border-[#0a2c4e]/30">
+          <div className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full bg-[#0a2c4e]/10 border border-[#0a2c4e]/30 ml-2">
             <Settings className="w-3 h-3 text-[#0a2c4e]" />
             <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">Administratorius</span>
           </div>
@@ -1268,6 +1457,7 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const [matches, setMatches] = useState([]);
   const [users, setUsers] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [predictions, setPredictions] = useState({});
   const [allPredictions, setAllPredictions] = useState([]);
   const [tournamentBet, setTournamentBet] = useState({ champion: null, topScorer: '', groupWinners: {} });
@@ -1307,6 +1497,11 @@ export default function App() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [authUser]);
+
+  // Companies - subscribe visada (reikalinga registracijos formai prieš auth)
+  useEffect(() => {
+    return listenToCompanies(setCompanies);
+  }, []);
 
   // Calculate points for all users
   const usersWithPoints = useMemo(() => {
@@ -1357,7 +1552,7 @@ export default function App() {
   // Not authenticated
   if (!authUser || !userProfile) {
     if (authMode === 'register') {
-      return <RegisterScreen onSwitchToLogin={() => setAuthMode('login')} />;
+      return <RegisterScreen companies={companies} onSwitchToLogin={() => setAuthMode('login')} />;
     }
     return <LoginScreen onSwitchToRegister={() => setAuthMode('register')} />;
   }
