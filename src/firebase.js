@@ -18,6 +18,7 @@ import {
   where,
   serverTimestamp,
   writeBatch,
+  getDocs,
 } from 'firebase/firestore';
 
 // === FIREBASE CONFIG ===
@@ -315,4 +316,225 @@ export async function deleteDemoMatches() {
     batch.delete(doc(db, 'matches', id));
   });
   await batch.commit();
+}
+
+// === REZULTATŲ SINCHRONIZAVIMAS IŠ FOOTBALL-DATA.ORG API ===
+// API teikia oficialius PFČ rezultatus realiu laiku
+// Free tier: 10 užklausų/min - pakanka draugų app'ui
+// Dokumentacija: https://www.football-data.org/documentation/quickstart
+
+// Komandų pavadinimų žemėlapis - API grąžina anglišką pavadinimą, mes naudojam 3 raidžių kodą
+// Kelios alternatyvos vienam kodui dėl skirtingų API atsakymų formatų
+const API_NAME_TO_CODE = {
+  // Group A
+  'Mexico': 'MEX',
+  'South Africa': 'RSA',
+  'Korea Republic': 'KOR',
+  'South Korea': 'KOR',
+  'Czechia': 'CZE',
+  'Czech Republic': 'CZE',
+  // Group B
+  'Canada': 'CAN',
+  'Switzerland': 'SUI',
+  'Qatar': 'QAT',
+  'Bosnia-Herzegovina': 'BIH',
+  'Bosnia and Herzegovina': 'BIH',
+  // Group C
+  'Brazil': 'BRA',
+  'Morocco': 'MAR',
+  'Haiti': 'HAI',
+  'Scotland': 'SCO',
+  // Group D
+  'USA': 'USA',
+  'United States': 'USA',
+  'Paraguay': 'PAR',
+  'Australia': 'AUS',
+  'Turkey': 'TUR',
+  'Türkiye': 'TUR',
+  // Group E
+  'Germany': 'GER',
+  'Curaçao': 'CUW',
+  'Curacao': 'CUW',
+  "Côte d'Ivoire": 'CIV',
+  'Ivory Coast': 'CIV',
+  'Ecuador': 'ECU',
+  // Group F
+  'Netherlands': 'NED',
+  'Japan': 'JPN',
+  'Sweden': 'SWE',
+  'Tunisia': 'TUN',
+  // Group G
+  'Belgium': 'BEL',
+  'Egypt': 'EGY',
+  'Iran': 'IRN',
+  'New Zealand': 'NZL',
+  // Group H
+  'Spain': 'ESP',
+  'Cape Verde': 'CPV',
+  'Saudi Arabia': 'KSA',
+  'Uruguay': 'URU',
+  // Group I
+  'France': 'FRA',
+  'Senegal': 'SEN',
+  'Norway': 'NOR',
+  'Iraq': 'IRQ',
+  // Group J
+  'Argentina': 'ARG',
+  'Algeria': 'ALG',
+  'Austria': 'AUT',
+  'Jordan': 'JOR',
+  // Group K
+  'Portugal': 'POR',
+  'Congo DR': 'COD',
+  'DR Congo': 'COD',
+  'Democratic Republic of the Congo': 'COD',
+  'Uzbekistan': 'UZB',
+  'Colombia': 'COL',
+  // Group L
+  'England': 'ENG',
+  'Croatia': 'CRO',
+  'Ghana': 'GHA',
+  'Panama': 'PAN',
+};
+
+// Pirma bandome pagal TLA (3 raidžių kodą - API'oje "tla" laukas), jei nepadeda - pagal pavadinimą
+function findTeamCode(apiTeam) {
+  if (!apiTeam) return null;
+  // Pirma TLA - jei tiesiogiai sutampa su mūsų kodais (dauguma atveju)
+  if (apiTeam.tla && API_NAME_TO_CODE[apiTeam.name]) {
+    return API_NAME_TO_CODE[apiTeam.name];
+  }
+  // Toliau pagal name
+  if (apiTeam.name && API_NAME_TO_CODE[apiTeam.name]) {
+    return API_NAME_TO_CODE[apiTeam.name];
+  }
+  // Trim ir mažosios raidės kaip atsargumas
+  if (apiTeam.name) {
+    const trimmed = apiTeam.name.trim();
+    if (API_NAME_TO_CODE[trimmed]) return API_NAME_TO_CODE[trimmed];
+  }
+  return null;
+}
+
+// API statusų pavertimas į mūsų vidinius statusus
+function mapApiStatus(apiStatus) {
+  if (apiStatus === 'FINISHED' || apiStatus === 'AWARDED') return 'finished';
+  if (apiStatus === 'IN_PLAY' || apiStatus === 'PAUSED') return 'live';
+  return 'upcoming'; // TIMED, SCHEDULED, POSTPONED, CANCELLED, SUSPENDED
+}
+
+// Pagrindinė sinchronizavimo funkcija
+// Grąžina statistiką: kiek rasta, kiek atnaujinta, klaidos
+export async function syncResultsFromAPI(apiKey) {
+  if (!apiKey) {
+    throw new Error('Trūksta API rakto. Pridėk VITE_FOOTBALL_DATA_API_KEY į Netlify Environment Variables.');
+  }
+
+  // Užklausa į football-data.org
+  let response;
+  try {
+    response = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
+      headers: { 'X-Auth-Token': apiKey },
+    });
+  } catch (err) {
+    throw new Error('Nepavyko susisiekti su API. Patikrink internetą.');
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Neteisingas API raktas');
+    }
+    if (response.status === 429) {
+      throw new Error('Per daug užklausų į API. Palauk minutę ir bandyk vėl.');
+    }
+    throw new Error(`API klaida: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const apiMatches = data.matches || [];
+
+  if (apiMatches.length === 0) {
+    return { total: 0, matched: 0, updated: 0, skipped: 0, unmatched: [] };
+  }
+
+  // Gauti visus mūsų matches
+  const snapshot = await getDocs(collection(db, 'matches'));
+  const ourMatches = [];
+  snapshot.forEach((d) => ourMatches.push({ id: d.id, ...d.data() }));
+
+  const stats = {
+    total: apiMatches.length,
+    matched: 0,
+    updated: 0,
+    skipped: 0,
+    unmatched: [],
+  };
+
+  const batch = writeBatch(db);
+
+  for (const apiMatch of apiMatches) {
+    const homeCode = findTeamCode(apiMatch.homeTeam);
+    const awayCode = findTeamCode(apiMatch.awayTeam);
+
+    // Neradome komandų kodų - knockout etape gali būti "Winner Group A" ar panašiai
+    if (!homeCode || !awayCode) {
+      stats.unmatched.push(`${apiMatch.homeTeam?.name || '?'} vs ${apiMatch.awayTeam?.name || '?'}`);
+      continue;
+    }
+
+    // Surasti mūsų match - pagal komandas + arti pagal datą (±24h)
+    const apiTime = new Date(apiMatch.utcDate).getTime();
+    const ourMatch = ourMatches.find((m) => {
+      if (m.home !== homeCode || m.away !== awayCode) return false;
+      const ourTime = new Date(m.kickoff).getTime();
+      return Math.abs(apiTime - ourTime) < 24 * 3600000;
+    });
+
+    if (!ourMatch) {
+      stats.unmatched.push(`${apiMatch.homeTeam?.name} vs ${apiMatch.awayTeam?.name} (nerasta mūsų DB)`);
+      continue;
+    }
+
+    stats.matched++;
+
+    // Naujas statusas iš API
+    const newStatus = mapApiStatus(apiMatch.status);
+
+    // Naujas rezultatas
+    let newScore = null;
+    const ftHome = apiMatch.score?.fullTime?.home;
+    const ftAway = apiMatch.score?.fullTime?.away;
+    const htHome = apiMatch.score?.halfTime?.home;
+    const htAway = apiMatch.score?.halfTime?.away;
+
+    if ((newStatus === 'finished' || newStatus === 'live')) {
+      if (ftHome != null && ftAway != null) {
+        newScore = { home: ftHome, away: ftAway };
+      } else if (htHome != null && htAway != null) {
+        // Live match, only halftime data available
+        newScore = { home: htHome, away: htAway };
+      }
+    }
+
+    // Ar reikia kažką keisti?
+    const statusChanged = newStatus !== ourMatch.status;
+    const scoreChanged = JSON.stringify(newScore) !== JSON.stringify(ourMatch.actualScore);
+
+    if (statusChanged || scoreChanged) {
+      const ref = doc(db, 'matches', ourMatch.id);
+      batch.update(ref, {
+        status: newStatus,
+        actualScore: newScore,
+      });
+      stats.updated++;
+    } else {
+      stats.skipped++;
+    }
+  }
+
+  if (stats.updated > 0) {
+    await batch.commit();
+  }
+
+  return stats;
 }
