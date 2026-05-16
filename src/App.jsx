@@ -1322,7 +1322,7 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   return (
     <div className="space-y-4 pb-24">
       <div>
-        <h1 className="font-display text-3xl text-[#1a1410] mb-1">LYDERLENTĖ</h1>
+        <h1 className="font-display text-3xl text-[#1a1410] mb-1">LYDERIAI</h1>
         <p className="text-sm text-[#6b6359]">
           {tab === 'overall' && `${sortedUsers.length} dalyvių · atnaujinama tiesiogiai`}
           {tab === 'company' && userProfile.companyName && `${myCompanyUsers.length} dalyvių iš ${userProfile.companyName}`}
@@ -1898,7 +1898,7 @@ export default function App() {
     { id: 'home', icon: Home, label: 'Pradžia' },
     { id: 'matches', icon: Calendar, label: 'Rungtynės' },
     { id: 'tournament', icon: Trophy, label: 'Prognozės' },
-    { id: 'leaderboard', icon: BarChart3, label: 'Lyderlentė' },
+    { id: 'leaderboard', icon: BarChart3, label: 'Lyderiai' },
   ];
 
   return (
