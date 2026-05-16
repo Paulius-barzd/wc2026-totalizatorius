@@ -424,30 +424,26 @@ function mapApiStatus(apiStatus) {
 }
 
 // Pagrindinė sinchronizavimo funkcija
-// Grąžina statistiką: kiek rasta, kiek atnaujinta, klaidos
-export async function syncResultsFromAPI(apiKey) {
-  if (!apiKey) {
-    throw new Error('Trūksta API rakto. Pridėk VITE_FOOTBALL_DATA_API_KEY į Netlify Environment Variables.');
-  }
-
-  // Užklausa į football-data.org
+// Kviečia Netlify Function (tarpininkas), kuri jau turi API raktą serveryje
+// Tai sprendžia CORS problemą + raktas paslėptas serveryje
+export async function syncResultsFromAPI() {
+  // Užklausa per mūsų Netlify Function (ne tiesiai į football-data.org)
   let response;
   try {
-    response = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
-      headers: { 'X-Auth-Token': apiKey },
-    });
+    response = await fetch('/.netlify/functions/sync-results');
   } catch (err) {
-    throw new Error('Nepavyko susisiekti su API. Patikrink internetą.');
+    throw new Error('Nepavyko susisiekti su sinchronizacijos funkcija. Patikrink internetą.');
   }
 
+  // Funkcija grąžina JSON su error lauku jei kažkas nepavyko
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new Error('Neteisingas API raktas');
+    let errorData = {};
+    try {
+      errorData = await response.json();
+    } catch (_) {
+      // ignore
     }
-    if (response.status === 429) {
-      throw new Error('Per daug užklausų į API. Palauk minutę ir bandyk vėl.');
-    }
-    throw new Error(`API klaida: ${response.status}`);
+    throw new Error(errorData.error || `Funkcija grąžino ${response.status}`);
   }
 
   const data = await response.json();
