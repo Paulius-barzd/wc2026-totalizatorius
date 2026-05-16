@@ -86,6 +86,16 @@ const groups = [
   { id: 'D', teams: ['ARG', 'FRA', 'ENG', 'BEL'] },
 ];
 
+// Knockout etapų lietuviški pavadinimai (rodomi MatchCard header'yje)
+const STAGE_LABELS = {
+  round_of_32: '1/16 finalas',
+  round_of_16: 'Aštuntfinalis',
+  quarter_final: 'Ketvirtfinalis',
+  semi_final: 'Pusfinalis',
+  third_place: 'Dėl 3 vietos',
+  final: 'Finalas',
+};
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -437,9 +447,15 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
     <div className="card-light rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-[#6b6359] uppercase tracking-wider">
-            Grupė {match.group}
-          </span>
+          {match.stage && match.stage !== 'group' ? (
+            <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+              {STAGE_LABELS[match.stage] || match.stage}
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold text-[#6b6359] uppercase tracking-wider">
+              Grupė {match.group}
+            </span>
+          )}
           <span className="text-[#9d9489]">·</span>
           <span className="text-[10px] text-[#6b6359]">{formatKickoff(match.kickoff)}</span>
         </div>
@@ -929,6 +945,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
     if (filter === 'all') return matches;
     if (filter === 'upcoming') return matches.filter((m) => m.status === 'upcoming');
     if (filter === 'finished') return matches.filter((m) => m.status === 'finished');
+    if (filter === 'knockout') return matches.filter((m) => m.stage && m.stage !== 'group');
     return matches.filter((m) => m.group === filter);
   }, [filter, matches]);
 
@@ -944,6 +961,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
           { id: 'all', label: 'Visos' },
           { id: 'upcoming', label: 'Būsimos' },
           { id: 'finished', label: 'Baigtos' },
+          { id: 'knockout', label: 'Knockout' },
           { id: 'A', label: 'A' }, { id: 'B', label: 'B' }, { id: 'C', label: 'C' },
           { id: 'D', label: 'D' }, { id: 'E', label: 'E' }, { id: 'F', label: 'F' },
           { id: 'G', label: 'G' }, { id: 'H', label: 'H' }, { id: 'I', label: 'I' },
@@ -1558,13 +1576,16 @@ const AdminScreen = ({ matches, onClose }) => {
       let msg = `Sinchronizacija baigta!\n\n` +
         `🔄 Iš API: ${stats.total} rungtynių\n` +
         `✅ Suderinta: ${stats.matched}\n` +
-        `📝 Atnaujinta: ${stats.updated}\n` +
-        `⏸ Be pakeitimų: ${stats.skipped}`;
+        `📝 Atnaujinta: ${stats.updated}\n`;
+      if (stats.created > 0) {
+        msg += `🆕 Sukurta naujų (knockout): ${stats.created}\n`;
+      }
+      msg += `⏸ Be pakeitimų: ${stats.skipped}`;
       if (stats.unmatched.length > 0) {
         const shown = stats.unmatched.slice(0, 5).join('\n  • ');
         msg += `\n\n⚠️ Nepriderinta (${stats.unmatched.length}):\n  • ${shown}`;
         if (stats.unmatched.length > 5) msg += `\n  • ... ir dar ${stats.unmatched.length - 5}`;
-        msg += `\n\n(Greičiausiai knockout etapo rungtynės - jose komandos dar nežinomos)`;
+        msg += `\n\n(Knockout etapo rungtynės be komandų - laukia grupių rezultatų)`;
       }
       alert(msg);
     } catch (err) {
