@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Trophy, Home, Calendar, BarChart3, Lock, Settings,
-  Award, Crown, Target, Star, Flame, Plus, Minus,
+  Award, Crown, Target, Star, Flame, Plus, Minus, Shield,
   ChevronRight, ChevronLeft, Radio, LogOut, Loader2,
   AlertCircle, CheckCircle2,
 } from 'lucide-react';
@@ -476,14 +476,14 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
   );
 };
 
-const TeamPickButton = ({ code, selected, onClick, accentColor }) => {
+const TeamPickButton = ({ code, selected, onClick, accentColor, disabled = false }) => {
   const team = teamsByCode[code];
   if (!team) return null;
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} disabled={disabled}
       className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all ${
         selected ? 'scale-105' : 'bg-[#faf7f1] border-[#1a1410]/8 hover:border-[#1a1410]/20'
-      }`}
+      } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
       style={selected ? { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}60` } : {}}>
       <Flag code={team.code} className="w-12 h-8" />
       <span className="text-[11px] font-semibold text-[#1a1410] text-center leading-tight min-h-[28px] flex items-center">
@@ -895,93 +895,217 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
   );
 };
 
-const TournamentScreen = ({ userProfile, tournamentBet, setTournamentBet }) => {
+const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBet }) => {
+  // Lokalus state redagavimui (atskiras nuo tournamentBet)
+  const [local, setLocal] = useState({
+    champion: tournamentBet?.champion || '',
+    bestPlayer: tournamentBet?.bestPlayer || '',
+    topScorer: tournamentBet?.topScorer || '',
+    bestGoalkeeper: tournamentBet?.bestGoalkeeper || '',
+    bestYoungPlayer: tournamentBet?.bestYoungPlayer || '',
+  });
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const allTeams = Object.entries(teamsByCode);
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Ar yra išsaugotų prognozių?
+  const hasSavedPrediction = Boolean(
+    tournamentBet?.champion || tournamentBet?.bestPlayer ||
+    tournamentBet?.topScorer || tournamentBet?.bestGoalkeeper ||
+    tournamentBet?.bestYoungPlayer
+  );
+
+  const [isEditing, setIsEditing] = useState(!hasSavedPrediction);
+
+  // Užšaldymas: bet kuri rungtynė pradėta (status != 'upcoming')
+  const isLocked = useMemo(
+    () => matches.some((m) => m.status !== 'upcoming'),
+    [matches]
+  );
+
+  // Ankstyviausios "upcoming" rungtynės countdown'ui
+  const firstUpcoming = useMemo(() => {
+    return [...matches]
+      .filter((m) => m.status === 'upcoming')
+      .sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''))[0];
+  }, [matches]);
+
+  // Visos dalyvaujančios šalys - sąjunga iš matches ir teamsByCode
+  const allCountries = useMemo(() => {
+    const codes = new Set();
+    matches.forEach((m) => {
+      if (m.home) codes.add(m.home);
+      if (m.away) codes.add(m.away);
+    });
+    Object.keys(teamsByCode).forEach((c) => codes.add(c));
+    return Array.from(codes)
+      .filter((c) => teamsByCode[c]) // tik tos, kurioms turime pavadinimą/vėliavą
+      .sort((a, b) => (teamsByCode[a]?.name || '').localeCompare(teamsByCode[b]?.name || '', 'lt'));
+  }, [matches]);
+
+  // Sinchronizuoti lokalų state kai tournamentBet pasikeičia iš išorės
+  useEffect(() => {
+    if (tournamentBet) {
+      setLocal({
+        champion: tournamentBet.champion || '',
+        bestPlayer: tournamentBet.bestPlayer || '',
+        topScorer: tournamentBet.topScorer || '',
+        bestGoalkeeper: tournamentBet.bestGoalkeeper || '',
+        bestYoungPlayer: tournamentBet.bestYoungPlayer || '',
+      });
+    }
+  }, [tournamentBet?.champion, tournamentBet?.bestPlayer, tournamentBet?.topScorer,
+      tournamentBet?.bestGoalkeeper, tournamentBet?.bestYoungPlayer]);
+
+  // Ar yra neišsaugotų pakeitimų?
+  const hasChanges = !hasSavedPrediction || (
+    local.champion !== (tournamentBet?.champion || '') ||
+    local.bestPlayer !== (tournamentBet?.bestPlayer || '') ||
+    local.topScorer !== (tournamentBet?.topScorer || '') ||
+    local.bestGoalkeeper !== (tournamentBet?.bestGoalkeeper || '') ||
+    local.bestYoungPlayer !== (tournamentBet?.bestYoungPlayer || '')
+  );
+
+  // Bent vienas laukas užpildytas?
+  const hasAnyValue = Boolean(
+    local.champion || local.bestPlayer || local.topScorer ||
+    local.bestGoalkeeper || local.bestYoungPlayer
+  );
 
   const handleSave = async () => {
+    if (isLocked || !hasChanges || saving || !hasAnyValue) return;
     setSaving(true);
     try {
-      await saveTournamentBet(userProfile.uid, tournamentBet);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      await saveTournamentBet(userProfile.uid, local);
+      setTournamentBet({
+        champion: local.champion || null,
+        bestPlayer: local.bestPlayer,
+        topScorer: local.topScorer,
+        bestGoalkeeper: local.bestGoalkeeper,
+        bestYoungPlayer: local.bestYoungPlayer,
+      });
+      setJustSaved(true);
+      setIsEditing(false);
+      setTimeout(() => setJustSaved(false), 2000);
     } catch (err) {
+      console.error(err);
       alert('Nepavyko išsaugoti: ' + err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  const handleCancel = () => {
+    setLocal({
+      champion: tournamentBet?.champion || '',
+      bestPlayer: tournamentBet?.bestPlayer || '',
+      topScorer: tournamentBet?.topScorer || '',
+      bestGoalkeeper: tournamentBet?.bestGoalkeeper || '',
+      bestYoungPlayer: tournamentBet?.bestYoungPlayer || '',
+    });
+    setIsEditing(false);
+  };
+
+  // Input'ai blokuojami: kai užšaldyta ARBA saugoma ARBA view mode su išsaugotomis prognozėmis
+  const inputsDisabled = isLocked || saving || (!isEditing && hasSavedPrediction);
+
+  const tu = firstUpcoming ? timeUntil(firstUpcoming.kickoff) : null;
+
+  // Žaidėjų prognozių laukai
+  const playerFields = [
+    { key: 'bestPlayer', label: 'Geriausias turnyro žaidėjas', icon: Trophy, points: 15, color: '#b8860b' },
+    { key: 'topScorer', label: 'Daugiausiai įvarčių įmušęs žaidėjas', icon: Target, points: 15, color: '#0e6b47' },
+    { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', icon: Shield, points: 15, color: '#0a2c4e' },
+    { key: 'bestYoungPlayer', label: 'Geriausias 21m. ar jaunesnis žaidėjas', icon: Star, points: 15, color: '#c8302e' },
+  ];
+
   return (
-    <div className="space-y-5 pb-24">
+    <div className="space-y-4 pb-24">
       <div>
         <h1 className="font-display text-3xl text-[#1a1410] mb-1">PROGNOZĖS</h1>
-        <p className="text-sm text-[#6b6359]">Iki turnyro pradžios · birž. 11 d.</p>
+        <p className="text-sm text-[#6b6359]">
+          {isLocked
+            ? 'Prognozės užšaldytos · turnyras prasidėjęs'
+            : `Spėjimas galimas iki pirmųjų rungtynių${tu ? ` · baigsis už ${tu}` : ''}`}
+        </p>
       </div>
 
-      <div className="card-light rounded-2xl p-5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl"
-          style={{ background: 'rgba(184, 134, 11, 0.15)' }} />
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-1">
+      {/* ČEMPIONAS */}
+      <div className="card-light rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
             <Crown className="w-5 h-5 text-[#b8860b]" />
             <h3 className="font-display text-lg text-[#1a1410]">ČEMPIONAS</h3>
           </div>
-          <p className="text-xs text-[#6b6359] mb-4">Už teisingą atsakymą - 25 taškai</p>
-          <div className="grid grid-cols-3 gap-2">
-            {allTeams.slice(0, 9).map(([code]) => (
-              <TeamPickButton key={code} code={code}
-                selected={tournamentBet.champion === code}
-                onClick={() => setTournamentBet((p) => ({ ...p, champion: code }))}
-                accentColor="#b8860b" />
-            ))}
-          </div>
+          <span className="text-[10px] font-bold text-[#b8860b] uppercase tracking-wider">25 tšk.</span>
         </div>
-      </div>
-
-      <div className="card-light rounded-2xl p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Target className="w-5 h-5 text-[#0e6b47]" />
-          <h3 className="font-display text-lg text-[#1a1410]">GERIAUSIAS STRIELCAS</h3>
-        </div>
-        <p className="text-xs text-[#6b6359] mb-4">Už teisingą atsakymą - 15 taškų</p>
-        <input type="text" placeholder="Pvz., Mbappe, Haaland..."
-          value={tournamentBet.topScorer || ''}
-          onChange={(e) => setTournamentBet((p) => ({ ...p, topScorer: e.target.value }))}
-          className="w-full px-4 py-3 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-[#1a1410] placeholder-[#9d9489] focus:outline-none focus:border-[#0e6b47]/50 font-semibold" />
-      </div>
-
-      <div className="card-light rounded-2xl p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Award className="w-5 h-5 text-[#0a2c4e]" />
-          <h3 className="font-display text-lg text-[#1a1410]">GRUPIŲ NUGALĖTOJAI</h3>
-        </div>
-        <p className="text-xs text-[#6b6359] mb-4">Po 5 taškus už kiekvieną grupę</p>
-        <div className="space-y-4">
-          {groups.map((g) => (
-            <div key={g.id} className="border-t border-[#1a1410]/10 pt-4 first:border-0 first:pt-0">
-              <div className="text-[10px] font-bold text-[#6b6359] uppercase tracking-wider mb-2">Grupė {g.id}</div>
-              <div className="grid grid-cols-2 gap-2">
-                {g.teams.map((code) => (
-                  <TeamPickButton key={code} code={code}
-                    selected={tournamentBet.groupWinners?.[g.id] === code}
-                    onClick={() => setTournamentBet((p) => ({ ...p, groupWinners: { ...p.groupWinners, [g.id]: code } }))}
-                    accentColor="#0a2c4e" />
-                ))}
-              </div>
-            </div>
+        <p className="text-xs text-[#6b6359] mb-4">Pasirink turnyro nugalėtoją</p>
+        <div className="grid grid-cols-3 gap-2">
+          {allCountries.map((code) => (
+            <TeamPickButton key={code} code={code}
+              selected={local.champion === code}
+              onClick={() => !inputsDisabled && setLocal({ ...local, champion: code })}
+              accentColor="#b8860b"
+              disabled={inputsDisabled} />
           ))}
         </div>
       </div>
 
-      <button onClick={handleSave} disabled={saving}
-        style={{ backgroundColor: saved ? '#0e6b47' : '#0e6b47', color: '#ffffff' }}
-        className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-opacity hover:opacity-90 shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
-        {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-        {saved && <CheckCircle2 className="w-4 h-4" />}
-        {saved ? 'Išsaugota' : (saving ? 'Saugoma...' : 'Išsaugoti prognozes')}
-      </button>
+      {/* ŽAIDĖJŲ PROGNOZĖS */}
+      {playerFields.map(({ key, label, icon: Icon, points, color }) => (
+        <div key={key} className="card-light rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Icon className="w-5 h-5" style={{ color }} />
+              <h3 className="font-display text-sm text-[#1a1410] uppercase tracking-wider">{label}</h3>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ml-2" style={{ color }}>
+              {points} tšk.
+            </span>
+          </div>
+          <p className="text-xs text-[#6b6359] mb-3">Įrašyk žaidėjo vardą ir pavardę</p>
+          <input type="text"
+            placeholder="pvz., Lionel Messi"
+            value={local[key]}
+            onChange={(e) => setLocal({ ...local, [key]: e.target.value })}
+            disabled={inputsDisabled}
+            className="w-full px-4 py-3 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-[#1a1410] placeholder-[#9d9489] focus:outline-none focus:border-[#0e6b47]/50 font-medium disabled:opacity-60 disabled:cursor-not-allowed" />
+        </div>
+      ))}
+
+      {/* MYGTUKAI */}
+      {isLocked ? (
+        <div className="rounded-xl p-3 bg-[#1a1410]/5 border border-[#1a1410]/10 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-[#6b6359]" />
+          <span className="text-xs text-[#6b6359]">Prognozės užšaldytos. Turnyras jau prasidėjęs.</span>
+        </div>
+      ) : !isEditing && hasSavedPrediction ? (
+        // VIEW MODE
+        <button onClick={() => setIsEditing(true)}
+          style={{ backgroundColor: '#f0ebe1', color: '#0a2c4e', border: '1px solid rgba(10, 44, 78, 0.15)' }}
+          className="w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:opacity-80 transition-all">
+          Redaguoti prognozes
+        </button>
+      ) : (
+        // EDIT MODE
+        <div className="flex gap-2">
+          {hasSavedPrediction && (
+            <button onClick={handleCancel} disabled={saving}
+              style={{ backgroundColor: '#ffffff', color: '#6b6359', border: '1px solid rgba(20,17,16,0.15)' }}
+              className="flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-[#1a1410]/5 transition-all">
+              Atšaukti
+            </button>
+          )}
+          <button onClick={handleSave} disabled={!hasChanges || saving || justSaved || !hasAnyValue}
+            style={(!hasChanges || justSaved || !hasAnyValue) && !saving
+              ? { backgroundColor: '#f0ebe1', color: '#6b6359' }
+              : { backgroundColor: '#0e6b47', color: '#ffffff' }}
+            className={`${hasSavedPrediction ? 'flex-1' : 'w-full'} py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all`}>
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {justSaved && <CheckCircle2 className="w-4 h-4" />}
+            {saving ? 'Saugoma...' : justSaved ? 'Išsaugota' : hasSavedPrediction ? 'Atnaujinti prognozes' : 'Patvirtinti prognozes'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1460,7 +1584,13 @@ export default function App() {
   const [companies, setCompanies] = useState([]);
   const [predictions, setPredictions] = useState({});
   const [allPredictions, setAllPredictions] = useState([]);
-  const [tournamentBet, setTournamentBet] = useState({ champion: null, topScorer: '', groupWinners: {} });
+  const [tournamentBet, setTournamentBet] = useState({
+    champion: null,
+    bestPlayer: '',
+    topScorer: '',
+    bestGoalkeeper: '',
+    bestYoungPlayer: '',
+  });
 
   // Listen to auth state
   useEffect(() => {
@@ -1473,8 +1603,10 @@ export default function App() {
           const bet = await getTournamentBet(user.uid);
           if (bet) setTournamentBet({
             champion: bet.champion || null,
+            bestPlayer: bet.bestPlayer || '',
             topScorer: bet.topScorer || '',
-            groupWinners: bet.groupWinners || {},
+            bestGoalkeeper: bet.bestGoalkeeper || '',
+            bestYoungPlayer: bet.bestYoungPlayer || '',
           });
         } catch (err) {
           console.error('Failed to load profile:', err);
@@ -1601,7 +1733,7 @@ export default function App() {
             matches={matches} predictions={predictions} setScreen={setScreen} onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'matches' && <MatchesScreen matches={matches} predictions={predictions}
             onUpdatePrediction={handleUpdatePrediction} />}
-          {screen === 'tournament' && <TournamentScreen userProfile={userProfile}
+          {screen === 'tournament' && <TournamentScreen userProfile={userProfile} matches={matches}
             tournamentBet={tournamentBet} setTournamentBet={setTournamentBet} />}
           {screen === 'leaderboard' && <LeaderboardScreen usersWithPoints={usersWithPoints}
             userProfile={userProfile} />}
