@@ -391,7 +391,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
               </span>
               {tu && (
                 <span className="text-[10px] font-mono text-[#6b6359]">
-                  Užšals po {tu}
+                  Spėjimas baigsis už {tu}
                 </span>
               )}
             </div>
@@ -671,7 +671,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
   const sortedUsers = [...usersWithPoints].sort((a, b) => b.points - a.points);
   const me = sortedUsers.find((u) => u.uid === userProfile.uid) || userProfile;
   const myRank = sortedUsers.findIndex((u) => u.uid === userProfile.uid) + 1;
-  const upcomingMatches = matches.filter((m) => m.status === 'upcoming').slice(0, 2);
+  const upcomingMatches = matches.filter((m) => m.status === 'upcoming').slice(0, 6);
   const liveMatches = matches.filter((m) => m.status === 'live');
 
   return (
