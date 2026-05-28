@@ -2045,7 +2045,7 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
     if (user.uid === currentUid && !willBeAdmin) {
       const ok = await confirm({
         title: 'Atimti sau admin teises?',
-        message: 'Po šio veiksmo nebematysi admin panelės. Atstatyti gali tik kitas admin'as arba Firebase Console.',
+        message: "Po šio veiksmo nebematysi admin panelės. Atstatyti gali tik kitas admin'as arba Firebase Console.",
         confirmLabel: 'Atimti',
         variant: 'danger',
       });
