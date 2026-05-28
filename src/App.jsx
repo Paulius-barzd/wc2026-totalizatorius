@@ -213,34 +213,34 @@ const translateAuthError = (code) => {
 
 const Styles = () => (
   <style>{`
-    .font-display { font-family: 'Archivo Black', sans-serif; letter-spacing: -0.02em; }
-    .font-body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-display { font-family: 'Montserrat', system-ui, sans-serif; font-weight: 900; letter-spacing: -0.02em; }
+    .font-body { font-family: 'Montserrat', system-ui, sans-serif; font-weight: 500; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
 
     .app-bg {
       background:
-        radial-gradient(circle at 0% 0%, rgba(14, 107, 71, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 100% 100%, rgba(184, 134, 11, 0.04) 0%, transparent 40%),
-        #faf7f1;
+        radial-gradient(circle at 0% 0%, rgba(209, 169, 116, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 100% 100%, rgba(84, 19, 14, 0.04) 0%, transparent 40%),
+        #FFFFFF;
       min-height: 100vh;
     }
 
     .glass-light {
-      background: rgba(250, 247, 241, 0.85);
+      background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(20, 17, 13, 0.08);
+      border-bottom: 1px solid rgba(84, 19, 14, 0.1);
     }
 
     .card-light {
       background: #ffffff;
-      border: 1px solid rgba(20, 17, 13, 0.08);
-      box-shadow: 0 1px 2px rgba(20, 17, 13, 0.03), 0 4px 12px rgba(20, 17, 13, 0.04);
+      border: 1px solid rgba(84, 19, 14, 0.1);
+      box-shadow: 0 1px 2px rgba(84, 19, 14, 0.04), 0 4px 12px rgba(84, 19, 14, 0.05);
     }
 
     .flag-img {
       border-radius: 3px;
-      box-shadow: 0 1px 2px rgba(20, 17, 13, 0.15);
-      outline: 1px solid rgba(20, 17, 13, 0.08);
+      box-shadow: 0 1px 2px rgba(68, 21, 20, 0.15);
+      outline: 1px solid rgba(68, 21, 20, 0.08);
       outline-offset: -1px;
     }
 
@@ -258,7 +258,7 @@ const Styles = () => (
       position: absolute;
       inset: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-      opacity: 0.04;
+      opacity: 0.06;
       pointer-events: none;
       mix-blend-mode: multiply;
     }
@@ -295,8 +295,8 @@ const FLAGS = {
 const Flag = ({ code, className = 'w-8 h-6' }) => {
   if (!code) {
     return (
-      <div className={`${className} bg-[#1a1410]/10 rounded-sm flex items-center justify-center`}>
-        <span className="text-[8px] font-bold uppercase text-[#6b6359]">?</span>
+      <div className={`${className} bg-[#441514]/10 rounded-sm flex items-center justify-center`}>
+        <span className="text-[8px] font-bold uppercase text-[#845641]">?</span>
       </div>
     );
   }
@@ -325,47 +325,70 @@ const Flag = ({ code, className = 'w-8 h-6' }) => {
   );
 };
 
+// VMG „W" mark - stilizuotas brand monogram'as su WOOD→CURRANT gradient'u.
+// Tikrą SVG logo failą galima įkelti į /public ir pakeisti šitą komponentą.
 const Emblem = ({ className = 'w-16 h-16', variant = 'dark' }) => {
   const isDark = variant === 'dark';
-  const colors = isDark
-    ? { bg: '#0a2c4e', border: '#c9a961', text: '#faf7f1', ball: '#faf7f1', ballPattern: '#0a2c4e' }
-    : { bg: '#faf7f1', border: '#0a2c4e', text: '#0a2c4e', ball: '#0a2c4e', ballPattern: '#faf7f1' };
+  const gradId = `vmg-grad-${variant}`;
+  // Tamsiame variante (ant CRIMSON fono) - WOOD shadow su WHITE highlight
+  // Šviesiame variante (ant WHITE fono) - WOOD su CURRANT shadow
+  const stops = isDark
+    ? [{ offset: '0%', color: '#D1A974' }, { offset: '50%', color: '#FFFFFF' }, { offset: '100%', color: '#D1A974' }]
+    : [{ offset: '0%', color: '#D1A974' }, { offset: '50%', color: '#FFFFFF' }, { offset: '100%', color: '#845641' }];
+  const shadowFill = isDark ? '#441514' : '#54130E';
 
   return (
     <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="48" fill={colors.bg} stroke={colors.border} strokeWidth="1.5"/>
-      <circle cx="50" cy="50" r="43" fill="none" stroke={colors.border} strokeWidth="0.5" opacity="0.5"/>
-      <g transform="translate(50, 38)">
-        <circle r="11" fill={colors.ball}/>
-        <polygon points="0,-5 5,-1.5 3,4.5 -3,4.5 -5,-1.5" fill={colors.ballPattern}/>
-        <path d="M0,-5 L0,-10 M5,-1.5 L9.5,-1.5 M-5,-1.5 L-9.5,-1.5 M3,4.5 L6,9 M-3,4.5 L-6,9"
-          stroke={colors.ballPattern} strokeWidth="0.9" fill="none" strokeLinecap="round"/>
-      </g>
-      <line x1="25" y1="56" x2="75" y2="56" stroke={colors.border} strokeWidth="0.4" opacity="0.6"/>
-      <text x="50" y="72" textAnchor="middle" fill={colors.text}
-        style={{ fontFamily: 'Archivo Black, sans-serif', fontSize: '15px', letterSpacing: '1.5px' }}>
-        2026
-      </text>
-      <circle cx="44" cy="84" r="0.8" fill={colors.border}/>
-      <circle cx="50" cy="84" r="0.8" fill={colors.border}/>
-      <circle cx="56" cy="84" r="0.8" fill={colors.border}/>
+      <defs>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          {stops.map((s, i) => <stop key={i} offset={s.offset} stopColor={s.color} />)}
+        </linearGradient>
+      </defs>
+      {/* W ribbon mark - 3 banguotos juostelės su gradient'u ir CRIMSON shadow trikampiais */}
+      {/* Kairė juostelė */}
+      <path d="M 10 28 Q 20 20, 30 28 L 45 75 Q 35 80, 25 75 Z"
+        fill={`url(#${gradId})`} />
+      <path d="M 28 30 L 38 70 L 32 70 L 22 32 Z" fill={shadowFill} opacity="0.85" />
+      {/* Vidurinė juostelė */}
+      <path d="M 35 28 Q 50 18, 65 28 L 60 75 Q 45 80, 40 75 Z"
+        fill={`url(#${gradId})`} />
+      <path d="M 50 30 L 50 70 L 44 70 L 44 32 Z" fill={shadowFill} opacity="0.85" />
+      {/* Dešinė juostelė + užkėlimas */}
+      <path d="M 65 28 Q 78 22, 88 30 Q 90 50, 85 72 L 70 75 Q 60 70, 60 60 Z"
+        fill={`url(#${gradId})`} />
+      <path d="M 70 32 L 80 65 L 74 70 L 64 35 Z" fill={shadowFill} opacity="0.85" />
     </svg>
+  );
+};
+
+// Mažas 2026 metų badge'as - prisitaiko prie VMG brand
+const YearBadge = ({ className = '', variant = 'dark' }) => {
+  const isDark = variant === 'dark';
+  return (
+    <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md font-display text-xs ${className}`}
+      style={{
+        backgroundColor: isDark ? '#D1A974' : '#54130E',
+        color: isDark ? '#54130E' : '#FFFFFF',
+        letterSpacing: '0.1em',
+      }}>
+      2026
+    </span>
   );
 };
 
 const StatusBadge = ({ status }) => {
   if (status === 'live') {
     return (
-      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#c8302e]/10 border border-[#c8302e]/25">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#c8302e] pulse-live" />
-        <span className="text-[10px] font-bold text-[#c8302e] uppercase tracking-wider">Tiesiogiai</span>
+      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#6A1107]/10 border border-[#6A1107]/25">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#6A1107] pulse-live" />
+        <span className="text-[10px] font-bold text-[#6A1107] uppercase tracking-wider">Tiesiogiai</span>
       </div>
     );
   }
   if (status === 'finished') {
     return (
-      <div className="px-2 py-0.5 rounded-full bg-[#1a1410]/5 border border-[#1a1410]/10">
-        <span className="text-[10px] font-bold text-[#6b6359] uppercase tracking-wider">Baigta</span>
+      <div className="px-2 py-0.5 rounded-full bg-[#441514]/5 border border-[#441514]/10">
+        <span className="text-[10px] font-bold text-[#845641] uppercase tracking-wider">Baigta</span>
       </div>
     );
   }
@@ -374,10 +397,10 @@ const StatusBadge = ({ status }) => {
 
 const PointsBadge = ({ points, type }) => {
   const styles = {
-    exact: 'bg-[#0e6b47]/10 text-[#0e6b47] border-[#0e6b47]/25',
-    diff: 'bg-[#b8860b]/10 text-[#b8860b] border-[#b8860b]/25',
-    outcome: 'bg-[#0a2c4e]/10 text-[#0a2c4e] border-[#0a2c4e]/25',
-    wrong: 'bg-[#1a1410]/5 text-[#6b6359] border-[#1a1410]/10',
+    exact: 'bg-[#54130E]/10 text-[#54130E] border-[#54130E]/25',
+    diff: 'bg-[#D1A974]/10 text-[#D1A974] border-[#D1A974]/25',
+    outcome: 'bg-[#54130E]/10 text-[#54130E] border-[#54130E]/25',
+    wrong: 'bg-[#441514]/5 text-[#845641] border-[#441514]/10',
   };
   const labels = { exact: 'Tikslus!', diff: 'Skirtumas', outcome: 'Baigtis', wrong: 'Pro šalį' };
   return (
@@ -393,19 +416,19 @@ const ScoreInput = ({ value, onChange, disabled }) => (
     <button
       onClick={() => onChange(Math.max(0, value - 1))}
       disabled={disabled}
-      className="w-7 h-7 rounded-md bg-[#1a1410]/5 border border-[#1a1410]/10 flex items-center justify-center text-[#6b6359] hover:bg-[#1a1410]/10 hover:text-[#1a1410] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="w-7 h-7 rounded-md bg-[#441514]/5 border border-[#441514]/10 flex items-center justify-center text-[#845641] hover:bg-[#441514]/10 hover:text-[#441514] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
       <Minus className="w-3.5 h-3.5" />
     </button>
     <div className={`w-10 h-10 rounded-md flex items-center justify-center font-mono font-bold text-xl ${
-      disabled ? 'bg-[#1a1410]/5 text-[#6b6359]' : 'bg-[#0e6b47]/10 text-[#0e6b47] border border-[#0e6b47]/30'
+      disabled ? 'bg-[#441514]/5 text-[#845641]' : 'bg-[#54130E]/10 text-[#54130E] border border-[#54130E]/30'
     }`}>
       {value}
     </div>
     <button
       onClick={() => onChange(Math.min(9, value + 1))}
       disabled={disabled}
-      className="w-7 h-7 rounded-md bg-[#1a1410]/5 border border-[#1a1410]/10 flex items-center justify-center text-[#6b6359] hover:bg-[#1a1410]/10 hover:text-[#1a1410] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="w-7 h-7 rounded-md bg-[#441514]/5 border border-[#441514]/10 flex items-center justify-center text-[#845641] hover:bg-[#441514]/10 hover:text-[#441514] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
       <Plus className="w-3.5 h-3.5" />
     </button>
@@ -418,7 +441,7 @@ const TeamBlock = ({ code }) => {
   return (
     <div className="flex flex-col items-center gap-2 min-w-0">
       <Flag code={team.code} className="w-12 h-8" />
-      <span className="text-[11px] font-bold text-[#1a1410] leading-tight text-center px-1">
+      <span className="text-[11px] font-bold text-[#441514] leading-tight text-center px-1">
         {team.name}
       </span>
     </div>
@@ -485,16 +508,16 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {match.stage && match.stage !== 'group' ? (
-            <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[#54130E] uppercase tracking-wider">
               {STAGE_LABELS[match.stage] || match.stage}
             </span>
           ) : (
-            <span className="text-[10px] font-bold text-[#6b6359] uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[#845641] uppercase tracking-wider">
               Grupė {match.group}
             </span>
           )}
-          <span className="text-[#9d9489]">·</span>
-          <span className="text-[10px] text-[#6b6359]">{formatKickoff(match.kickoff)}</span>
+          <span className="text-[#A88A6F]">·</span>
+          <span className="text-[10px] text-[#845641]">{formatKickoff(match.kickoff)}</span>
         </div>
         <StatusBadge status={match.status} />
       </div>
@@ -503,29 +526,29 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
         <TeamBlock code={match.home} />
         <div className="flex flex-col items-center">
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1a1410]/5 border border-[#1a1410]/10">
-              <span className="font-display text-2xl text-[#1a1410]">{match.actualScore.home}</span>
-              <span className="text-[#9d9489]">:</span>
-              <span className="font-display text-2xl text-[#1a1410]">{match.actualScore.away}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#441514]/5 border border-[#441514]/10">
+              <span className="font-display text-2xl text-[#441514]">{match.actualScore.home}</span>
+              <span className="text-[#A88A6F]">:</span>
+              <span className="font-display text-2xl text-[#441514]">{match.actualScore.away}</span>
             </div>
           ) : (
-            <div className="px-3 py-1.5 rounded-lg bg-[#1a1410]/5 border border-[#1a1410]/10">
-              <span className="font-mono text-xs text-[#6b6359]">vs</span>
+            <div className="px-3 py-1.5 rounded-lg bg-[#441514]/5 border border-[#441514]/10">
+              <span className="font-mono text-xs text-[#845641]">vs</span>
             </div>
           )}
         </div>
         <TeamBlock code={match.away} />
       </div>
 
-      <div className="border-t border-[#1a1410]/10 pt-3 mt-3">
+      <div className="border-t border-[#441514]/10 pt-3 mt-3">
         {match.status === 'upcoming' && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-[#0e6b47] uppercase tracking-wider flex items-center gap-1">
+              <span className="text-[10px] font-bold text-[#54130E] uppercase tracking-wider flex items-center gap-1">
                 <Target className="w-3 h-3" /> {prediction ? 'Tavo spėjimas' : 'Tavo prognozė'}
               </span>
               {tu && (
-                <span className="text-[10px] font-mono text-[#6b6359]">
+                <span className="text-[10px] font-mono text-[#845641]">
                   Iki uždarymo liko {tu}
                 </span>
               )}
@@ -534,7 +557,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
               <ScoreInput value={localPred.home}
                 onChange={(v) => setLocalPred({ ...localPred, home: v })}
                 disabled={inputsDisabled} />
-              <span className="text-[#6b6359] font-mono">:</span>
+              <span className="text-[#845641] font-mono">:</span>
               <ScoreInput value={localPred.away}
                 onChange={(v) => setLocalPred({ ...localPred, away: v })}
                 disabled={inputsDisabled} />
@@ -543,7 +566,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
             {/* VIEW MODE: tik Redaguoti spėjimą mygtukas */}
             {!isEditing && prediction && (
               <button onClick={() => setIsEditing(true)}
-                style={{ backgroundColor: '#f0ebe1', color: '#0a2c4e', border: '1px solid rgba(10, 44, 78, 0.15)' }}
+                style={{ backgroundColor: '#FAF0E0', color: '#54130E', border: '1px solid rgba(84, 19, 14, 0.2)' }}
                 className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:opacity-80 transition-all">
                 Redaguoti spėjimą
               </button>
@@ -554,15 +577,15 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
               <div className="flex gap-2">
                 {prediction && (
                   <button onClick={handleCancel} disabled={saving}
-                    style={{ backgroundColor: '#ffffff', color: '#6b6359', border: '1px solid rgba(20,17,16,0.15)' }}
-                    className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-[#1a1410]/5 transition-all">
+                    style={{ backgroundColor: '#ffffff', color: '#845641', border: '1px solid rgba(68, 21, 20, 0.2)' }}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-[#441514]/5 transition-all">
                     Atšaukti
                   </button>
                 )}
                 <button onClick={handleSave} disabled={!hasChanges || saving || justSaved}
                   style={(!hasChanges || justSaved) && !saving
-                    ? { backgroundColor: '#f0ebe1', color: '#6b6359' }
-                    : { backgroundColor: '#0e6b47', color: '#ffffff' }}
+                    ? { backgroundColor: '#FAF0E0', color: '#845641' }
+                    : { backgroundColor: '#54130E', color: '#ffffff' }}
                   className={`${prediction ? 'flex-1' : 'w-full'} py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all`}>
                   {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   {justSaved && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -576,13 +599,13 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
         {match.status === 'live' && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-[#6b6359]" />
+              <Lock className="w-3.5 h-3.5 text-[#845641]" />
               {prediction ? (
-                <span className="text-xs text-[#6b6359]">
-                  Tavo spėjimas: <span className="font-mono font-bold text-[#1a1410]">{prediction.home}:{prediction.away}</span>
+                <span className="text-xs text-[#845641]">
+                  Tavo spėjimas: <span className="font-mono font-bold text-[#441514]">{prediction.home}:{prediction.away}</span>
                 </span>
               ) : (
-                <span className="text-xs text-[#c8302e]">Nespėjai pažymėti prognozės</span>
+                <span className="text-xs text-[#6A1107]">Nespėjai pažymėti prognozės</span>
               )}
             </div>
           </div>
@@ -592,11 +615,11 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {prediction ? (
-                <span className="text-xs text-[#6b6359]">
-                  Spėjo: <span className="font-mono font-bold text-[#1a1410]">{prediction.home}:{prediction.away}</span>
+                <span className="text-xs text-[#845641]">
+                  Spėjo: <span className="font-mono font-bold text-[#441514]">{prediction.home}:{prediction.away}</span>
                 </span>
               ) : (
-                <span className="text-xs text-[#6b6359]">Nespėjai pažymėti</span>
+                <span className="text-xs text-[#845641]">Nespėjai pažymėti</span>
               )}
             </div>
             {pointsResult && <PointsBadge points={pointsResult.pts} type={pointsResult.type} />}
@@ -613,11 +636,11 @@ const TeamPickButton = ({ code, selected, onClick, accentColor, disabled = false
   return (
     <button onClick={onClick} disabled={disabled}
       className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all ${
-        selected ? 'scale-105' : 'bg-[#faf7f1] border-[#1a1410]/8 hover:border-[#1a1410]/20'
+        selected ? 'scale-105' : 'bg-[#FFFFFF] border-[#441514]/8 hover:border-[#441514]/20'
       } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
       style={selected ? { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}60` } : {}}>
       <Flag code={team.code} className="w-12 h-8" />
-      <span className="text-[11px] font-semibold text-[#1a1410] text-center leading-tight min-h-[28px] flex items-center">
+      <span className="text-[11px] font-semibold text-[#441514] text-center leading-tight min-h-[28px] flex items-center">
         {team.name}
       </span>
       {selected && <Star className="w-3 h-3 fill-current" style={{ color: accentColor }} />}
@@ -627,22 +650,36 @@ const TeamPickButton = ({ code, selected, onClick, accentColor, disabled = false
 
 const FormField = ({ label, type = 'text', placeholder, value, onChange, autoComplete }) => (
   <div>
-    <label className="text-[10px] font-bold text-[#6b6359] uppercase tracking-wider block mb-1.5">{label}</label>
+    <label className="text-[10px] font-bold text-[#845641] uppercase tracking-wider block mb-1.5">{label}</label>
     <input
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       autoComplete={autoComplete}
-      className="w-full px-4 py-3 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-[#1a1410] placeholder-[#9d9489] focus:outline-none focus:border-[#0e6b47]/50 font-medium"
+      className="w-full px-4 py-3 rounded-lg bg-[#FFFFFF] border border-[#441514]/15 text-[#441514] placeholder-[#A88A6F] focus:outline-none focus:border-[#54130E] focus:ring-2 focus:ring-[#54130E]/15 hover:border-[#845641]/30 font-medium transition-all"
     />
   </div>
 );
 
+// Futbolo kamuolio ikona (Lucide neturi soccer ball - custom inline SVG)
+const FootballIcon = ({ className = 'w-5 h-5' }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="12,7 16,10 14.5,15 9.5,15 8,10" />
+    <line x1="12" y1="7" x2="12" y2="3" />
+    <line x1="16" y1="10" x2="20" y2="9" />
+    <line x1="8" y1="10" x2="4" y2="9" />
+    <line x1="14.5" y1="15" x2="17.5" y2="19" />
+    <line x1="9.5" y1="15" x2="6.5" y2="19" />
+  </svg>
+);
+
 const ErrorAlert = ({ message }) => message ? (
-  <div className="flex items-start gap-2 p-3 rounded-lg bg-[#c8302e]/10 border border-[#c8302e]/30 mb-3">
-    <AlertCircle className="w-4 h-4 text-[#c8302e] flex-shrink-0 mt-0.5" />
-    <span className="text-sm text-[#c8302e]">{message}</span>
+  <div className="flex items-start gap-2 p-3 rounded-lg bg-[#6A1107]/10 border border-[#6A1107]/30 mb-3">
+    <AlertCircle className="w-4 h-4 text-[#6A1107] flex-shrink-0 mt-0.5" />
+    <span className="text-sm text-[#6A1107]">{message}</span>
   </div>
 ) : null;
 
@@ -650,7 +687,7 @@ const ErrorAlert = ({ message }) => message ? (
 
 const ModalOverlay = ({ children, onClose }) => (
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1a1410]/60 backdrop-blur-sm"
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#441514]/60 backdrop-blur-sm"
     onClick={onClose}>
     <div
       className="card-light rounded-2xl p-5 max-w-sm w-full"
@@ -679,23 +716,23 @@ function useDialog() {
 
   const dialog = state ? (
     <ModalOverlay onClose={() => state.kind === 'confirm' ? close(false) : close(true)}>
-      <h3 className="font-display text-base uppercase tracking-wider text-[#1a1410] mb-2">
+      <h3 className="font-display text-base uppercase tracking-wider text-[#441514] mb-2">
         {state.title}
       </h3>
       {state.message && (
-        <p className="text-sm text-[#6b6359] mb-4 whitespace-pre-line">{state.message}</p>
+        <p className="text-sm text-[#845641] mb-4 whitespace-pre-line">{state.message}</p>
       )}
       {state.kind === 'confirm' ? (
         <div className="flex gap-2">
           <button
             onClick={() => close(false)}
-            style={{ backgroundColor: '#ffffff', color: '#6b6359', border: '1px solid rgba(20,17,16,0.15)' }}
-            className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#1a1410]/5 transition-all">
+            style={{ backgroundColor: '#ffffff', color: '#845641', border: '1px solid rgba(68, 21, 20, 0.2)' }}
+            className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#441514]/5 transition-all">
             {state.cancelLabel || 'Atšaukti'}
           </button>
           <button
             onClick={() => close(true)}
-            style={{ backgroundColor: state.variant === 'danger' ? '#c8302e' : '#0e6b47', color: '#ffffff' }}
+            style={{ backgroundColor: state.variant === 'danger' ? '#6A1107' : '#54130E', color: '#ffffff' }}
             className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:opacity-90">
             {state.confirmLabel || 'Patvirtinti'}
           </button>
@@ -703,7 +740,7 @@ function useDialog() {
       ) : (
         <button
           onClick={() => close(true)}
-          style={{ backgroundColor: state.variant === 'danger' ? '#c8302e' : '#0e6b47', color: '#ffffff' }}
+          style={{ backgroundColor: state.variant === 'danger' ? '#6A1107' : '#54130E', color: '#ffffff' }}
           className="w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:opacity-90">
           Gerai
         </button>
@@ -722,8 +759,8 @@ const LoadingScreen = () => (
   <div className="app-bg font-body flex items-center justify-center min-h-screen">
     <Styles />
     <div className="flex flex-col items-center gap-3">
-      <Loader2 className="w-8 h-8 text-[#0a2c4e] animate-spin" />
-      <p className="text-sm text-[#6b6359] uppercase tracking-widest">Kraunama...</p>
+      <Loader2 className="w-8 h-8 text-[#54130E] animate-spin" />
+      <p className="text-sm text-[#845641] uppercase tracking-widest">Kraunama...</p>
     </div>
   </div>
 );
@@ -751,11 +788,11 @@ const LoginScreen = ({ onSwitchToRegister }) => {
   };
 
   return (
-    <div className="app-bg font-body text-[#1a1410] min-h-screen flex items-center justify-center p-4">
+    <div className="app-bg font-body text-[#441514] min-h-screen flex items-center justify-center p-4">
       <Styles />
       <div className="max-w-md w-full">
         <div className="relative overflow-hidden rounded-2xl p-6 paper-grain mb-4"
-          style={{ background: 'linear-gradient(135deg, #0a2c4e 0%, #051c30 100%)', color: '#faf7f1' }}>
+          style={{ background: 'linear-gradient(135deg, #54130E 0%, #441514 100%)', color: '#FFFFFF' }}>
           <div className="flex justify-center mb-4">
             <Emblem className="w-24 h-24" variant="dark" />
           </div>
@@ -763,9 +800,9 @@ const LoginScreen = ({ onSwitchToRegister }) => {
             PASAULIO FUTBOLO<br/>ČEMPIONATAS
           </h1>
           <div className="flex items-center justify-center gap-3 my-3">
-            <div className="h-px w-12" style={{ background: 'rgba(201, 169, 97, 0.5)' }}/>
-            <span className="font-display text-base" style={{ color: '#c9a961', letterSpacing: '2px' }}>2026</span>
-            <div className="h-px w-12" style={{ background: 'rgba(201, 169, 97, 0.5)' }}/>
+            <div className="h-px w-12" style={{ background: 'rgba(209, 169, 116, 0.6)' }}/>
+            <span className="font-display text-base" style={{ color: '#D1A974', letterSpacing: '2px' }}>2026</span>
+            <div className="h-px w-12" style={{ background: 'rgba(209, 169, 116, 0.6)' }}/>
           </div>
           <p className="font-display text-center text-sm tracking-widest opacity-90">TOTALIZATORIUS</p>
           <p className="text-[10px] uppercase tracking-widest opacity-60 mt-3 text-center">
@@ -774,7 +811,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
         </div>
 
         <div className="card-light rounded-2xl p-5">
-          <h2 className="font-display text-lg uppercase tracking-wider text-[#1a1410] mb-4">Prisijungimas</h2>
+          <h2 className="font-display text-lg uppercase tracking-wider text-[#441514] mb-4">Prisijungimas</h2>
 
           <ErrorAlert message={error} />
 
@@ -787,20 +824,20 @@ const LoginScreen = ({ onSwitchToRegister }) => {
 
           <div className="grid grid-cols-2 gap-2 mt-5">
             <button onClick={handleLogin} disabled={loading}
-              style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+              style={{ backgroundColor: '#54130E', color: '#ffffff' }}
               className="py-3 rounded-xl font-display uppercase tracking-wider transition-opacity hover:opacity-90 shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Prisijungti
             </button>
             <button onClick={onSwitchToRegister} disabled={loading}
-              style={{ backgroundColor: '#ffffff', color: '#0e6b47', border: '2px solid #0e6b47' }}
+              style={{ backgroundColor: '#ffffff', color: '#54130E', border: '2px solid #54130E' }}
               className="py-3 rounded-xl font-display uppercase tracking-wider transition-colors text-sm disabled:opacity-50">
               Registruotis
             </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-[#6b6359] uppercase tracking-widest">
+        <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-[#845641] uppercase tracking-widest">
           <Lock className="w-3 h-3" /> Saugu · Šifruota · Privatu
         </div>
       </div>
@@ -866,71 +903,95 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
   };
 
   return (
-    <div className="app-bg font-body text-[#1a1410] min-h-screen flex items-center justify-center p-4">
+    <div className="app-bg font-body text-[#441514] min-h-screen flex items-center justify-center p-4">
       <Styles />
       <div className="max-w-md w-full">
+        {/* Atgal mygtukas su slide animacija */}
         <button onClick={onSwitchToLogin} disabled={loading}
-          className="text-[#6b6359] hover:text-[#1a1410] flex items-center gap-1 mb-3 text-sm font-semibold disabled:opacity-50">
-          <ChevronLeft className="w-4 h-4" /> Atgal
+          className="text-[#845641] hover:text-[#441514] flex items-center gap-1 mb-3 text-sm font-semibold disabled:opacity-50 transition-all duration-200 hover:-translate-x-1 group">
+          <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" /> Atgal
         </button>
 
-        <div className="card-light rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <Trophy className="w-5 h-5 text-[#0e6b47]" />
-            <h2 className="font-display text-lg uppercase tracking-wider text-[#1a1410]">Registracija</h2>
-          </div>
-          <p className="text-xs text-[#6b6359] mb-4">Sukurk paskyrą ir pradėk prognozuoti</p>
-
-          <ErrorAlert message={error} />
-
-          <div className="space-y-3">
-            <FormField label="Vartotojo vardas" placeholder="pvz., paulius_lt"
-              value={form.username} onChange={updateField('username')} autoComplete="username" />
-            <FormField label="Vardas Pavardė" placeholder="pvz., Paulius Pavardenis"
-              value={form.fullName} onChange={updateField('fullName')} autoComplete="name" />
-            <FormField label="El. paštas" type="email" placeholder="vardas@example.com"
-              value={form.email} onChange={updateField('email')} autoComplete="email" />
-            <FormField label="Slaptažodis" type="password" placeholder="Bent 8 simb. (raidė + skaičius)"
-              value={form.password} onChange={updateField('password')} autoComplete="new-password" />
-
-            {/* Company dropdown */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#6b6359] uppercase tracking-wider mb-1">Įmonė</label>
-              <select
-                value={form.companyChoice}
-                onChange={(e) => updateField('companyChoice')(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-white border border-[#1a1410]/15 text-sm text-[#1a1410] focus:outline-none focus:border-[#0e6b47] disabled:opacity-50"
-                disabled={loading}>
-                <option value="" disabled>-- Pasirinkti įmonę --</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code ? `${c.code} — ${c.name}` : c.name}
-                  </option>
-                ))}
-                <option value="none">Be įmonės</option>
-              </select>
-              {companies.length === 0 && (
-                <p className="text-[10px] text-[#6b6359] mt-1">
-                  Įmonių dar nėra. Gali pasirinkti „Be įmonės" arba palaukti, kol administratorius pridės.
-                </p>
-              )}
+        {/* Gradient border wrapper - kortelė su VMG brand spalvomis */}
+        <div className="relative rounded-2xl p-[1.5px] shadow-xl transition-shadow duration-300 hover:shadow-2xl"
+          style={{ background: 'linear-gradient(135deg, #54130E 0%, #6A1107 40%, #D1A974 100%)' }}>
+          <div className="bg-white rounded-2xl p-6">
+            {/* Header - kamuolio ikona dėžutėje su gradient'u + gradient text */}
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:rotate-6"
+                style={{ background: 'linear-gradient(135deg, #54130E 0%, #6A1107 100%)' }}>
+                <FootballIcon className="w-6 h-6 text-[#D1A974]" />
+              </div>
+              <h2 className="font-display text-xl uppercase tracking-wider"
+                style={{
+                  background: 'linear-gradient(135deg, #54130E 0%, #6A1107 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}>
+                Registracija
+              </h2>
             </div>
+            <p className="text-sm text-[#845641] mb-5 italic">
+              Pradėk spėlioti ir parodyk, kad esi geriausias
+            </p>
+
+            <ErrorAlert message={error} />
+
+            <div className="space-y-3">
+              <FormField label="Vartotojo vardas" placeholder="pvz., sportasluve"
+                value={form.username} onChange={updateField('username')} autoComplete="username" />
+              <FormField label="Vardas Pavardė" placeholder="pvz., Vardenis Pavardenis"
+                value={form.fullName} onChange={updateField('fullName')} autoComplete="name" />
+              <FormField label="El. paštas" type="email" placeholder="vardas@imone.lt"
+                value={form.email} onChange={updateField('email')} autoComplete="email" />
+              <FormField label="Slaptažodis" type="password" placeholder="Bent 8 simb. (raidė + skaičius)"
+                value={form.password} onChange={updateField('password')} autoComplete="new-password" />
+
+              {/* Įmonės dropdown su tokiu pat hover/focus style kaip FormField */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#845641] uppercase tracking-wider mb-1.5">Įmonė</label>
+                <select
+                  value={form.companyChoice}
+                  onChange={(e) => updateField('companyChoice')(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg bg-white border border-[#441514]/15 text-sm text-[#441514] focus:outline-none focus:border-[#54130E] focus:ring-2 focus:ring-[#54130E]/15 hover:border-[#845641]/30 transition-all font-medium disabled:opacity-50"
+                  disabled={loading}>
+                  <option value="" disabled>-- Pasirinkti įmonę --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code ? `${c.code} — ${c.name}` : c.name}
+                    </option>
+                  ))}
+                  <option value="none">Be įmonės</option>
+                </select>
+                {companies.length === 0 && (
+                  <p className="text-[10px] text-[#845641] mt-1">
+                    Įmonių dar nėra. Gali pasirinkti „Be įmonės" arba palaukti, kol administratorius pridės.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Submit mygtukas su gradient + scale hover + shadow grow */}
+            <button onClick={handleRegister} disabled={loading}
+              style={{ background: 'linear-gradient(135deg, #54130E 0%, #6A1107 100%)' }}
+              className="w-full py-3.5 rounded-xl font-display uppercase tracking-wider text-white shadow-lg text-sm mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:brightness-110 active:scale-[0.98]">
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Sukurti paskyrą
+            </button>
+
+            <p className="text-[10px] text-center text-[#845641] mt-3">
+              Sukurdamas paskyrą sutinki su naudojimo taisyklėmis
+            </p>
           </div>
-
-          <button onClick={handleRegister} disabled={loading}
-            style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
-            className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-opacity hover:opacity-90 shadow-lg text-sm mt-5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            Sukurti paskyrą
-          </button>
-
-          <p className="text-[10px] text-center text-[#6b6359] mt-3">
-            Sukurdamas paskyrą sutinki su naudojimo taisyklėmis
-          </p>
         </div>
 
-        <p className="text-xs text-center text-[#6b6359] mt-4">
-          Jau turi paskyrą? <button onClick={onSwitchToLogin} className="text-[#0e6b47] font-bold hover:underline">Prisijungti</button>
+        <p className="text-xs text-center text-[#845641] mt-4">
+          Jau turi paskyrą?{' '}
+          <button onClick={onSwitchToLogin}
+            className="text-[#54130E] font-bold hover:underline hover:text-[#6A1107] transition-colors">
+            Prisijungti
+          </button>
         </p>
       </div>
     </div>
@@ -952,11 +1013,11 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
     <div>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-[#0e6b47]" />
-          <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Artimiausios</h2>
+          <Calendar className="w-4 h-4 text-[#54130E]" />
+          <h2 className="font-display text-sm uppercase tracking-wider text-[#441514]">Artimiausios</h2>
         </div>
         <button onClick={() => setScreen('matches')}
-          className="text-[10px] font-bold text-[#0e6b47] uppercase tracking-wider flex items-center gap-1">
+          className="text-[10px] font-bold text-[#54130E] uppercase tracking-wider flex items-center gap-1">
           Visos <ChevronRight className="w-3 h-3" />
         </button>
       </div>
@@ -971,22 +1032,22 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
   const leaderboardSection = sortedUsers.length > 0 && (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Crown className="w-4 h-4 text-[#b8860b]" />
-        <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Lyderiai</h2>
+        <Crown className="w-4 h-4 text-[#D1A974]" />
+        <h2 className="font-display text-sm uppercase tracking-wider text-[#441514]">Lyderiai</h2>
       </div>
       <div className="card-light rounded-xl p-2">
         {sortedUsers.slice(0, 5).map((u, i) => (
-          <div key={u.uid} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#1a1410]/5 transition-colors">
+          <div key={u.uid} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#441514]/5 transition-colors">
             <div className="font-display text-xl w-6 text-center"
-              style={{ color: i === 0 ? '#b8860b' : i === 1 ? '#94806f' : i === 2 ? '#a85a2a' : '#9d9489' }}>
+              style={{ color: i === 0 ? '#D1A974' : i === 1 ? '#A88A6F' : i === 2 ? '#845641' : '#A88A6F' }}>
               {i + 1}
             </div>
             <div className="w-8 h-8 rounded-full flex items-center justify-center font-display text-sm"
               style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
               {u.avatarLetter}
             </div>
-            <div className="flex-1 text-sm font-semibold text-[#1a1410] truncate">{u.username}</div>
-            <div className="font-mono font-bold text-[#0e6b47]">{u.points}</div>
+            <div className="flex-1 text-sm font-semibold text-[#441514] truncate">{u.username}</div>
+            <div className="font-mono font-bold text-[#54130E]">{u.points}</div>
           </div>
         ))}
       </div>
@@ -996,7 +1057,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div className="relative overflow-hidden rounded-2xl p-5 lg:p-7 paper-grain"
-        style={{ background: 'linear-gradient(135deg, #0a2c4e 0%, #051c30 100%)', color: '#faf7f1' }}>
+        style={{ background: 'linear-gradient(135deg, #54130E 0%, #441514 100%)', color: '#FFFFFF' }}>
         <div className="flex items-start gap-4 mb-4">
           <Emblem className="w-16 h-16 lg:w-20 lg:h-20 flex-shrink-0" variant="dark" />
           <div className="flex-1 min-w-0">
@@ -1006,7 +1067,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
             <h1 className="font-display text-base lg:text-xl leading-tight">
               PASAULIO FUTBOLO<br/>ČEMPIONATAS 2026
             </h1>
-            <div className="text-[10px] uppercase tracking-widest opacity-60 mt-1" style={{ color: '#c9a961' }}>
+            <div className="text-[10px] uppercase tracking-widest opacity-60 mt-1" style={{ color: '#D1A974' }}>
               Totalizatorius
             </div>
           </div>
@@ -1023,7 +1084,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Serija</div>
-            <div className="font-display text-2xl lg:text-3xl flex items-center gap-1" style={{ color: '#f5d27a' }}>
+            <div className="font-display text-2xl lg:text-3xl flex items-center gap-1" style={{ color: '#D1A974' }}>
               {me.streak || 0} <Flame className="w-5 h-5 lg:w-6 lg:h-6" />
             </div>
           </div>
@@ -1033,8 +1094,8 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
       {liveMatches.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <Radio className="w-4 h-4 text-[#c8302e] pulse-live" />
-            <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Vyksta dabar</h2>
+            <Radio className="w-4 h-4 text-[#6A1107] pulse-live" />
+            <h2 className="font-display text-sm uppercase tracking-wider text-[#441514]">Vyksta dabar</h2>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {liveMatches.map((m) => (
@@ -1046,9 +1107,9 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
 
       {matches.length === 0 && (
         <div className="card-light rounded-xl p-5 text-center">
-          <AlertCircle className="w-8 h-8 text-[#b8860b] mx-auto mb-2" />
-          <p className="text-sm text-[#1a1410] font-semibold mb-1">Dar nėra įvestų rungtynių</p>
-          <p className="text-xs text-[#6b6359]">Administratorius dar nesuvedė rungtynių sąrašo.</p>
+          <AlertCircle className="w-8 h-8 text-[#D1A974] mx-auto mb-2" />
+          <p className="text-sm text-[#441514] font-semibold mb-1">Dar nėra įvestų rungtynių</p>
+          <p className="text-xs text-[#845641]">Administratorius dar nesuvedė rungtynių sąrašo.</p>
         </div>
       )}
 
@@ -1075,8 +1136,8 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">RUNGTYNĖS</h1>
-        <p className="text-sm text-[#6b6359]">Spėk rezultatą iki rungtynių pradžios</p>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">RUNGTYNĖS</h1>
+        <p className="text-sm text-[#845641]">Spėk rezultatą iki rungtynių pradžios</p>
       </div>
 
       <div className="flex gap-2 overflow-x-auto lg:flex-wrap lg:overflow-visible scrollbar-hide -mx-1 px-1">
@@ -1092,7 +1153,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
         ].map((f) => (
           <button key={f.id} onClick={() => setFilter(f.id)}
             className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-              filter === f.id ? 'bg-[#0e6b47] text-white' : 'bg-white text-[#6b6359] border border-[#1a1410]/10 hover:text-[#1a1410]'
+              filter === f.id ? 'bg-[#54130E] text-white' : 'bg-white text-[#845641] border border-[#441514]/10 hover:text-[#441514]'
             }`}>
             {f.label}
           </button>
@@ -1101,7 +1162,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
 
       {filteredMatches.length === 0 ? (
         <div className="card-light rounded-xl p-5 text-center">
-          <p className="text-sm text-[#6b6359]">Nėra rungtynių pagal pasirinktą filtrą</p>
+          <p className="text-sm text-[#845641]">Nėra rungtynių pagal pasirinktą filtrą</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1233,17 +1294,17 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
 
   // Žaidėjų prognozių laukai
   const playerFields = [
-    { key: 'bestPlayer', label: 'Geriausias turnyro žaidėjas', icon: Trophy, points: 15, color: '#b8860b' },
-    { key: 'topScorer', label: 'Daugiausiai įvarčių įmušęs žaidėjas', icon: Target, points: 15, color: '#0e6b47' },
-    { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', icon: Shield, points: 15, color: '#0a2c4e' },
-    { key: 'bestYoungPlayer', label: 'Geriausias 21m. ar jaunesnis žaidėjas', icon: Star, points: 15, color: '#c8302e' },
+    { key: 'bestPlayer', label: 'Geriausias turnyro žaidėjas', icon: Trophy, points: 15, color: '#D1A974' },
+    { key: 'topScorer', label: 'Daugiausiai įvarčių įmušęs žaidėjas', icon: Target, points: 15, color: '#54130E' },
+    { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', icon: Shield, points: 15, color: '#54130E' },
+    { key: 'bestYoungPlayer', label: 'Geriausias 21m. ar jaunesnis žaidėjas', icon: Star, points: 15, color: '#6A1107' },
   ];
 
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">PROGNOZĖS</h1>
-        <p className="text-sm text-[#6b6359]">
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">PROGNOZĖS</h1>
+        <p className="text-sm text-[#845641]">
           {isLocked
             ? 'Prognozės užšaldytos · turnyras jau prasidėjęs'
             : `Prognozes galima keisti iki pirmųjų rungtynių${tu ? ` · liko ${tu}` : ''}`}
@@ -1254,18 +1315,18 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
       <div className="card-light rounded-2xl p-5">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <Crown className="w-5 h-5 text-[#b8860b]" />
-            <h3 className="font-display text-lg text-[#1a1410]">ČEMPIONAS</h3>
+            <Crown className="w-5 h-5 text-[#D1A974]" />
+            <h3 className="font-display text-lg text-[#441514]">ČEMPIONAS</h3>
           </div>
-          <span className="text-[10px] font-bold text-[#b8860b] uppercase tracking-wider">25 tšk.</span>
+          <span className="text-[10px] font-bold text-[#D1A974] uppercase tracking-wider">25 tšk.</span>
         </div>
-        <p className="text-xs text-[#6b6359] mb-4">Pasirink turnyro nugalėtoją</p>
+        <p className="text-xs text-[#845641] mb-4">Pasirink turnyro nugalėtoją</p>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
           {allCountries.map((code) => (
             <TeamPickButton key={code} code={code}
               selected={local.champion === code}
               onClick={() => !inputsDisabled && setLocal({ ...local, champion: code })}
-              accentColor="#b8860b"
+              accentColor="#D1A974"
               disabled={inputsDisabled} />
           ))}
         </div>
@@ -1278,33 +1339,33 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Icon className="w-5 h-5" style={{ color }} />
-              <h3 className="font-display text-sm text-[#1a1410] uppercase tracking-wider">{label}</h3>
+              <h3 className="font-display text-sm text-[#441514] uppercase tracking-wider">{label}</h3>
             </div>
             <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ml-2" style={{ color }}>
               {points} tšk.
             </span>
           </div>
-          <p className="text-xs text-[#6b6359] mb-3">Įrašyk žaidėjo vardą ir pavardę</p>
+          <p className="text-xs text-[#845641] mb-3">Įrašyk žaidėjo vardą ir pavardę</p>
           <input type="text"
             placeholder="pvz., Lionel Messi"
             value={local[key]}
             onChange={(e) => setLocal({ ...local, [key]: e.target.value })}
             disabled={inputsDisabled}
-            className="w-full px-4 py-3 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-[#1a1410] placeholder-[#9d9489] focus:outline-none focus:border-[#0e6b47]/50 font-medium disabled:opacity-60 disabled:cursor-not-allowed" />
+            className="w-full px-4 py-3 rounded-lg bg-[#FFFFFF] border border-[#441514]/10 text-[#441514] placeholder-[#A88A6F] focus:outline-none focus:border-[#54130E]/50 font-medium disabled:opacity-60 disabled:cursor-not-allowed" />
         </div>
       ))}
       </div>
 
       {/* MYGTUKAI */}
       {isLocked ? (
-        <div className="rounded-xl p-3 bg-[#1a1410]/5 border border-[#1a1410]/10 flex items-center gap-2">
-          <Lock className="w-4 h-4 text-[#6b6359]" />
-          <span className="text-xs text-[#6b6359]">Prognozės užšaldytos. Turnyras jau prasidėjęs.</span>
+        <div className="rounded-xl p-3 bg-[#441514]/5 border border-[#441514]/10 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-[#845641]" />
+          <span className="text-xs text-[#845641]">Prognozės užšaldytos. Turnyras jau prasidėjęs.</span>
         </div>
       ) : !isEditing && hasSavedPrediction ? (
         // VIEW MODE
         <button onClick={() => setIsEditing(true)}
-          style={{ backgroundColor: '#f0ebe1', color: '#0a2c4e', border: '1px solid rgba(10, 44, 78, 0.15)' }}
+          style={{ backgroundColor: '#FAF0E0', color: '#54130E', border: '1px solid rgba(84, 19, 14, 0.2)' }}
           className="w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:opacity-80 transition-all">
           Redaguoti prognozes
         </button>
@@ -1313,15 +1374,15 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
         <div className="flex gap-2">
           {hasSavedPrediction && (
             <button onClick={handleCancel} disabled={saving}
-              style={{ backgroundColor: '#ffffff', color: '#6b6359', border: '1px solid rgba(20,17,16,0.15)' }}
-              className="flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-[#1a1410]/5 transition-all">
+              style={{ backgroundColor: '#ffffff', color: '#845641', border: '1px solid rgba(68, 21, 20, 0.2)' }}
+              className="flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-[#441514]/5 transition-all">
               Atšaukti
             </button>
           )}
           <button onClick={handleSave} disabled={!hasChanges || saving || justSaved || !hasAnyValue}
             style={(!hasChanges || justSaved || !hasAnyValue) && !saving
-              ? { backgroundColor: '#f0ebe1', color: '#6b6359' }
-              : { backgroundColor: '#0e6b47', color: '#ffffff' }}
+              ? { backgroundColor: '#FAF0E0', color: '#845641' }
+              : { backgroundColor: '#54130E', color: '#ffffff' }}
             className={`${hasSavedPrediction ? 'flex-1' : 'w-full'} py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all`}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {justSaved && <CheckCircle2 className="w-4 h-4" />}
@@ -1384,24 +1445,24 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   if (sortedUsers.length === 0) {
     return (
       <div className="card-light rounded-xl p-6 text-center pb-24">
-        <p className="text-sm text-[#6b6359]">Dar nėra dalyvių</p>
+        <p className="text-sm text-[#845641]">Dar nėra dalyvių</p>
       </div>
     );
   }
 
   const renderUserRow = (u, i, isMe) => (
     <div key={u.uid}
-      className={`flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0 ${isMe ? 'bg-[#0e6b47]/5' : ''}`}>
-      <div className="font-display text-sm w-6 text-center text-[#6b6359]">{i + 1}</div>
+      className={`flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0 ${isMe ? 'bg-[#54130E]/5' : ''}`}>
+      <div className="font-display text-sm w-6 text-center text-[#845641]">{i + 1}</div>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm"
         style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
         {u.avatarLetter}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-semibold truncate ${isMe ? 'text-[#0e6b47]' : 'text-[#1a1410]'}`}>
+        <div className={`text-sm font-semibold truncate ${isMe ? 'text-[#54130E]' : 'text-[#441514]'}`}>
           {u.username} {isMe && <span className="text-[10px] ml-1 opacity-70">(tu)</span>}
         </div>
-        <div className="text-[10px] text-[#6b6359] flex items-center gap-2 truncate">
+        <div className="text-[10px] text-[#845641] flex items-center gap-2 truncate">
           {u.companyName ? (
             <span className="truncate">{u.companyName}</span>
           ) : (
@@ -1411,8 +1472,8 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         </div>
       </div>
       <div className="text-right">
-        <div className="font-mono font-bold text-[#0e6b47]">{u.points}</div>
-        <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">tšk.</div>
+        <div className="font-mono font-bold text-[#54130E]">{u.points}</div>
+        <div className="text-[9px] text-[#845641] uppercase tracking-wider">tšk.</div>
       </div>
     </div>
   );
@@ -1424,15 +1485,15 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         {[users[1], users[0], users[2]].map((u, idx) => {
           const realIdx = idx === 0 ? 1 : idx === 1 ? 0 : 2;
           const heights = ['h-20', 'h-28', 'h-16'];
-          const colors = ['#94806f', '#b8860b', '#a85a2a'];
+          const colors = ['#A88A6F', '#D1A974', '#845641'];
           return (
             <div key={u.uid} className="flex flex-col items-center">
               <div className="w-12 h-12 rounded-full flex items-center justify-center font-display text-lg mb-2 bg-white"
                 style={{ color: u.avatarColor, border: `2px solid ${u.avatarColor}` }}>
                 {u.avatarLetter}
               </div>
-              <div className="text-xs font-bold text-[#1a1410] mb-1 truncate w-full text-center">{u.username}</div>
-              <div className="font-mono text-xs text-[#0e6b47] mb-2">{u.points} tšk.</div>
+              <div className="text-xs font-bold text-[#441514] mb-1 truncate w-full text-center">{u.username}</div>
+              <div className="font-mono text-xs text-[#54130E] mb-2">{u.points} tšk.</div>
               <div className={`${heights[idx]} w-full rounded-t-lg flex items-start justify-center pt-2 font-display text-2xl`}
                 style={{
                   background: `linear-gradient(180deg, ${colors[realIdx]}30 0%, ${colors[realIdx]}10 100%)`,
@@ -1452,8 +1513,8 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">LYDERIAI</h1>
-        <p className="text-sm text-[#6b6359]">
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">LYDERIAI</h1>
+        <p className="text-sm text-[#845641]">
           {tab === 'overall' && `${sortedUsers.length} ${pluralizeLt(sortedUsers.length, ['dalyvis', 'dalyviai', 'dalyvių'])} · atnaujinama tiesiogiai`}
           {tab === 'company' && userProfile.companyName && `${myCompanyUsers.length} ${pluralizeLt(myCompanyUsers.length, ['dalyvis', 'dalyviai', 'dalyvių'])} iš ${userProfile.companyName}`}
           {tab === 'company' && !userProfile.companyName && 'Tu nepriklausai įmonei'}
@@ -1462,10 +1523,10 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-[#1a1410]/5 lg:max-w-md">
+      <div className="flex gap-1 p-1 rounded-xl bg-[#441514]/5 lg:max-w-md">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={tab === t.id ? { backgroundColor: '#ffffff', color: '#1a1410' } : { color: '#6b6359' }}
+            style={tab === t.id ? { backgroundColor: '#ffffff', color: '#441514' } : { color: '#845641' }}
             className="flex-1 py-2 px-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all">
             {t.label}
           </button>
@@ -1487,19 +1548,19 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         <>
           {!userProfile.companyId ? (
             <div className="card-light rounded-xl p-6 text-center">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[#1a1410]/5 flex items-center justify-center">
-                <Settings className="w-6 h-6 text-[#6b6359]" />
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[#441514]/5 flex items-center justify-center">
+                <Settings className="w-6 h-6 text-[#845641]" />
               </div>
-              <p className="text-sm font-bold text-[#1a1410] mb-1">Tu nepriklausai įmonei</p>
-              <p className="text-xs text-[#6b6359]">Susisiek su administratoriumi, kad priskirtų tave įmonei.</p>
+              <p className="text-sm font-bold text-[#441514] mb-1">Tu nepriklausai įmonei</p>
+              <p className="text-xs text-[#845641]">Susisiek su administratoriumi, kad priskirtų tave įmonei.</p>
             </div>
           ) : (
             <>
               <div className="card-light rounded-xl p-3 flex items-center gap-2 lg:max-w-md">
-                <div className="w-2 h-8 rounded-full bg-[#0e6b47]"></div>
+                <div className="w-2 h-8 rounded-full bg-[#54130E]"></div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] text-[#6b6359] uppercase tracking-wider">Tavo įmonė</div>
-                  <div className="font-display text-base text-[#1a1410] truncate">{userProfile.companyName}</div>
+                  <div className="text-[10px] text-[#845641] uppercase tracking-wider">Tavo įmonė</div>
+                  <div className="font-display text-base text-[#441514] truncate">{userProfile.companyName}</div>
                 </div>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:items-start">
@@ -1516,8 +1577,8 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
       {/* TAB: ĮMONĖS */}
       {tab === 'companies' && (
         <>
-          <div className="rounded-xl p-3 bg-[#0a2c4e]/5 border border-[#0a2c4e]/15">
-            <p className="text-[11px] text-[#0a2c4e] leading-relaxed">
+          <div className="rounded-xl p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+            <p className="text-[11px] text-[#54130E] leading-relaxed">
               <span className="font-bold">Kaip skaičiuojama:</span> įmonės rikiuojamos pagal taškų <span className="font-bold">vidurkį vienam dalyviui</span>.
               Taip mažos įmonės gali sąžiningai konkuruoti su didelėmis - dydis nesuteikia pranašumo.
             </p>
@@ -1525,7 +1586,7 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
 
           {companyStats.length === 0 ? (
             <div className="card-light rounded-xl p-6 text-center">
-              <p className="text-sm text-[#6b6359]">Dar nėra įmonių su dalyviais</p>
+              <p className="text-sm text-[#845641]">Dar nėra įmonių su dalyviais</p>
             </div>
           ) : (
             <div className="card-light rounded-xl overflow-hidden">
@@ -1537,22 +1598,22 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                   : 'w-9 h-9 text-sm';
                 return (
                   <div key={c.companyId}
-                    className={`flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0 ${isMyCompany ? 'bg-[#0e6b47]/5' : ''}`}>
-                    <div className="font-display text-sm w-6 text-center text-[#6b6359]">{i + 1}</div>
-                    <div className={`${iconClass} rounded-lg flex items-center justify-center font-display font-mono tracking-tight bg-[#0a2c4e]/10 text-[#0a2c4e] flex-shrink-0`}>
+                    className={`flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0 ${isMyCompany ? 'bg-[#54130E]/5' : ''}`}>
+                    <div className="font-display text-sm w-6 text-center text-[#845641]">{i + 1}</div>
+                    <div className={`${iconClass} rounded-lg flex items-center justify-center font-display font-mono tracking-tight bg-[#54130E]/10 text-[#54130E] flex-shrink-0`}>
                       {abbrev}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-semibold truncate ${isMyCompany ? 'text-[#0e6b47]' : 'text-[#1a1410]'}`}>
+                      <div className={`text-sm font-semibold truncate ${isMyCompany ? 'text-[#54130E]' : 'text-[#441514]'}`}>
                         {c.companyName} {isMyCompany && <span className="text-[10px] ml-1 opacity-70">(tavo)</span>}
                       </div>
-                      <div className="text-[10px] text-[#6b6359]">
+                      <div className="text-[10px] text-[#845641]">
                         {c.memberCount} {pluralizeLt(c.memberCount, ['dalyvis', 'dalyviai', 'dalyvių'])} · {c.totalPoints} tšk. iš viso
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono font-bold text-[#0e6b47]">{c.avgPoints.toFixed(1)}</div>
-                      <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">vid.</div>
+                      <div className="font-mono font-bold text-[#54130E]">{c.avgPoints.toFixed(1)}</div>
+                      <div className="text-[9px] text-[#845641] uppercase tracking-wider">vid.</div>
                     </div>
                   </div>
                 );
@@ -1591,18 +1652,18 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
     <div className="space-y-4 pb-24 lg:pb-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:items-start">
       <div className="card-light rounded-2xl p-5 text-center">
-        <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center font-display text-3xl bg-[#faf7f1]"
+        <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center font-display text-3xl bg-[#FFFFFF]"
           style={{ color: userProfile.avatarColor, border: `3px solid ${userProfile.avatarColor}` }}>
           {userProfile.avatarLetter}
         </div>
-        <h2 className="font-display text-2xl text-[#1a1410]">{userProfile.username}</h2>
-        <p className="text-sm text-[#1a1410] mt-1">{userProfile.fullName}</p>
-        <p className="text-xs text-[#6b6359]">{userProfile.email}</p>
+        <h2 className="font-display text-2xl text-[#441514]">{userProfile.username}</h2>
+        <p className="text-sm text-[#441514] mt-1">{userProfile.fullName}</p>
+        <p className="text-xs text-[#845641]">{userProfile.email}</p>
 
         {/* Įmonės informacija */}
-        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0a2c4e]/8 border border-[#0a2c4e]/20">
-          <Trophy className="w-3 h-3 text-[#0a2c4e]" />
-          <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#54130E]/8 border border-[#54130E]/20">
+          <Trophy className="w-3 h-3 text-[#54130E]" />
+          <span className="text-[10px] font-bold text-[#54130E] uppercase tracking-wider">
             {userProfile.companyCode && (
               <span className="font-mono mr-1">{userProfile.companyCode}</span>
             )}
@@ -1611,43 +1672,43 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
         </div>
 
         {userProfile.isAdmin && (
-          <div className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full bg-[#0a2c4e]/10 border border-[#0a2c4e]/30 ml-2">
-            <Settings className="w-3 h-3 text-[#0a2c4e]" />
-            <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">Administratorius</span>
+          <div className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full bg-[#54130E]/10 border border-[#54130E]/30 ml-2">
+            <Settings className="w-3 h-3 text-[#54130E]" />
+            <span className="text-[10px] font-bold text-[#54130E] uppercase tracking-wider">Administratorius</span>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-2 lg:self-stretch">
         <div className="card-light rounded-xl p-4 flex flex-col justify-center">
-          <div className="text-[10px] text-[#6b6359] uppercase tracking-wider mb-1">Iš viso taškų</div>
-          <div className="font-display text-3xl lg:text-5xl text-[#0e6b47]">{me.points || 0}</div>
+          <div className="text-[10px] text-[#845641] uppercase tracking-wider mb-1">Iš viso taškų</div>
+          <div className="font-display text-3xl lg:text-5xl text-[#54130E]">{me.points || 0}</div>
         </div>
         <div className="card-light rounded-xl p-4 flex flex-col justify-center">
-          <div className="text-[10px] text-[#6b6359] uppercase tracking-wider mb-1">Tikslių rezultatų</div>
-          <div className="font-display text-3xl lg:text-5xl text-[#b8860b]">{stats.exact}</div>
+          <div className="text-[10px] text-[#845641] uppercase tracking-wider mb-1">Tikslių rezultatų</div>
+          <div className="font-display text-3xl lg:text-5xl text-[#D1A974]">{stats.exact}</div>
         </div>
       </div>
       </div>
 
       <div className="card-light rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Tikslumas</h3>
-          <span className="text-[10px] text-[#6b6359]">
+          <h3 className="font-display text-sm uppercase tracking-wider text-[#441514]">Tikslumas</h3>
+          <span className="text-[10px] text-[#845641]">
             {stats.predicted}/{stats.total} sp{pluralizeLt(stats.predicted, ['ėjimas', 'ėjimai', 'ėjimų'])}
             {stats.missed > 0 && ` · ${stats.missed} praleist${pluralizeLt(stats.missed, ['a', 'os', 'ų'])}`}
           </span>
         </div>
         <div className="space-y-2">
           {[
-            { label: 'Tikslus rezultatas', count: stats.exact, color: '#0e6b47' },
-            { label: 'Teisingas skirtumas', count: stats.diff, color: '#b8860b' },
-            { label: 'Tik baigtis', count: stats.outcome, color: '#0a2c4e' },
-            { label: 'Pro šalį', count: stats.wrong, color: '#9d9489' },
+            { label: 'Tikslus rezultatas', count: stats.exact, color: '#54130E' },
+            { label: 'Teisingas skirtumas', count: stats.diff, color: '#D1A974' },
+            { label: 'Tik baigtis', count: stats.outcome, color: '#54130E' },
+            { label: 'Pro šalį', count: stats.wrong, color: '#A88A6F' },
           ].map((s) => (
             <div key={s.label} className="flex items-center gap-3">
-              <div className="text-xs flex-1 text-[#1a1410]">{s.label}</div>
-              <div className="flex-1 h-1.5 bg-[#1a1410]/8 rounded-full overflow-hidden">
+              <div className="text-xs flex-1 text-[#441514]">{s.label}</div>
+              <div className="flex-1 h-1.5 bg-[#441514]/8 rounded-full overflow-hidden">
                 <div className="h-full rounded-full" style={{
                   width: `${stats.predicted ? (s.count / stats.predicted) * 100 : 0}%`,
                   backgroundColor: s.color
@@ -1663,27 +1724,27 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
       {tournamentResults && (me.tournamentPoints > 0 || me.tournamentBreakdown) && (
         <div className="card-light rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Turnyro prognozės</h3>
-            <span className="font-mono text-sm font-bold text-[#0e6b47]">+{me.tournamentPoints || 0} tšk.</span>
+            <h3 className="font-display text-sm uppercase tracking-wider text-[#441514]">Turnyro prognozės</h3>
+            <span className="font-mono text-sm font-bold text-[#54130E]">+{me.tournamentPoints || 0} tšk.</span>
           </div>
           <div className="space-y-1.5">
             {[
-              { label: 'Čempionas', key: 'champion', points: 25, color: '#b8860b' },
-              { label: 'Geriausias žaidėjas', key: 'bestPlayer', points: 15, color: '#b8860b' },
-              { label: 'Strielcas', key: 'topScorer', points: 15, color: '#0e6b47' },
-              { label: 'Vartininkas', key: 'bestGoalkeeper', points: 15, color: '#0a2c4e' },
-              { label: 'Jaunasis', key: 'bestYoungPlayer', points: 15, color: '#c8302e' },
+              { label: 'Čempionas', key: 'champion', points: 25, color: '#D1A974' },
+              { label: 'Geriausias žaidėjas', key: 'bestPlayer', points: 15, color: '#D1A974' },
+              { label: 'Strielcas', key: 'topScorer', points: 15, color: '#54130E' },
+              { label: 'Vartininkas', key: 'bestGoalkeeper', points: 15, color: '#54130E' },
+              { label: 'Jaunasis', key: 'bestYoungPlayer', points: 15, color: '#6A1107' },
             ].map((row) => {
               const earned = me.tournamentBreakdown?.[row.key] > 0;
               const hasResult = row.key === 'champion' ? !!tournamentResults.champion : !!tournamentResults[row.key];
               if (!hasResult) return null;
               return (
                 <div key={row.key} className="flex items-center justify-between text-xs">
-                  <span className="text-[#1a1410]">{row.label}</span>
+                  <span className="text-[#441514]">{row.label}</span>
                   {earned ? (
                     <span className="font-mono font-bold" style={{ color: row.color }}>+{row.points} tšk.</span>
                   ) : (
-                    <span className="text-[#9d9489]">−</span>
+                    <span className="text-[#A88A6F]">−</span>
                   )}
                 </div>
               );
@@ -1694,15 +1755,15 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
 
       {userProfile.isAdmin && (
         <button onClick={onOpenAdmin}
-          style={{ backgroundColor: '#0a2c4e', color: '#ffffff' }}
+          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
           className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-opacity hover:opacity-90 text-sm flex items-center justify-center gap-2">
           <Settings className="w-4 h-4" /> Administratoriaus skydas
         </button>
       )}
 
       <button onClick={onLogout}
-        style={{ backgroundColor: '#ffffff', color: '#c8302e', border: '1px solid rgba(200, 48, 46, 0.3)' }}
-        className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-colors text-sm flex items-center justify-center gap-2 hover:bg-[#c8302e]/5">
+        style={{ backgroundColor: '#ffffff', color: '#6A1107', border: '1px solid rgba(106, 17, 7, 0.3)' }}
+        className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-colors text-sm flex items-center justify-center gap-2 hover:bg-[#6A1107]/5">
         <LogOut className="w-4 h-4" /> Atsijungti
       </button>
     </div>
@@ -1711,25 +1772,25 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
 
 // === RULES SCREEN (taisyklės ir taškų skaičiavimo logika) ===
 
-const RuleSection = ({ icon: Icon, title, color = '#0a2c4e', children }) => (
+const RuleSection = ({ icon: Icon, title, color = '#54130E', children }) => (
   <div className="card-light rounded-2xl p-5">
-    <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1a1410]/8">
+    <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#441514]/8">
       <Icon className="w-5 h-5" style={{ color }} />
-      <h3 className="font-display text-base uppercase tracking-wider text-[#1a1410]">{title}</h3>
+      <h3 className="font-display text-base uppercase tracking-wider text-[#441514]">{title}</h3>
     </div>
     {children}
   </div>
 );
 
 const PointsRow = ({ label, points, color, example }) => (
-  <div className="flex items-start gap-3 py-2 border-b border-[#1a1410]/5 last:border-0">
+  <div className="flex items-start gap-3 py-2 border-b border-[#441514]/5 last:border-0">
     <div className="flex-shrink-0 w-14 text-center">
       <div className="font-display text-xl" style={{ color }}>+{points}</div>
-      <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">tšk.</div>
+      <div className="text-[9px] text-[#845641] uppercase tracking-wider">tšk.</div>
     </div>
     <div className="flex-1 min-w-0">
-      <div className="text-sm font-semibold text-[#1a1410]">{label}</div>
-      {example && <div className="text-[11px] text-[#6b6359] mt-0.5">{example}</div>}
+      <div className="text-sm font-semibold text-[#441514]">{label}</div>
+      {example && <div className="text-[11px] text-[#845641] mt-0.5">{example}</div>}
     </div>
   </div>
 );
@@ -1738,156 +1799,156 @@ const RulesScreen = () => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">TAISYKLĖS</h1>
-        <p className="text-sm text-[#6b6359]">Kaip žaisti, kaip skaičiuojami taškai, kaip rikiuojama lyderlentė</p>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">TAISYKLĖS</h1>
+        <p className="text-sm text-[#845641]">Kaip žaisti, kaip skaičiuojami taškai, kaip rikiuojama lyderlentė</p>
       </div>
 
       {/* Apžvalga */}
-      <RuleSection icon={Info} title="Apžvalga" color="#0a2c4e">
-        <p className="text-sm text-[#1a1410] leading-relaxed">
+      <RuleSection icon={Info} title="Apžvalga" color="#54130E">
+        <p className="text-sm text-[#441514] leading-relaxed">
           PFČ 2026 totalizatorius — vidinis pasaulio futbolo čempionato 2026 m. spėjimų ratas.
           Spėk kiekvienų rungtynių rezultatą bei turnyro pabaigos statistiką (čempionas, geriausi žaidėjai)
           ir rink taškus. Nugalėtojas paaiškės po finalo.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-          <div className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
-            <div className="text-[#6b6359] uppercase tracking-wider text-[9px]">Turnyras</div>
-            <div className="font-bold text-[#1a1410]">2026-06-11 — 2026-07-19</div>
+          <div className="rounded-lg bg-[#54130E]/5 px-3 py-2">
+            <div className="text-[#845641] uppercase tracking-wider text-[9px]">Turnyras</div>
+            <div className="font-bold text-[#441514]">2026-06-11 — 2026-07-19</div>
           </div>
-          <div className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
-            <div className="text-[#6b6359] uppercase tracking-wider text-[9px]">Iš viso rungtynių</div>
-            <div className="font-bold text-[#1a1410]">72 grupių + 32 atkrintamųjų</div>
+          <div className="rounded-lg bg-[#54130E]/5 px-3 py-2">
+            <div className="text-[#845641] uppercase tracking-wider text-[9px]">Iš viso rungtynių</div>
+            <div className="font-bold text-[#441514]">72 grupių + 32 atkrintamųjų</div>
           </div>
         </div>
       </RuleSection>
 
       {/* Kaip dalyvauti */}
-      <RuleSection icon={CheckCircle2} title="Kaip dalyvauti" color="#0e6b47">
-        <ol className="space-y-2 text-sm text-[#1a1410]">
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">1.</span>Užsiregistruok ir pasirink savo įmonę (arba „Be įmonės")</li>
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">2.</span>Iki turnyro pradžios suvesk turnyro prognozes (čempionas + 4 žaidėjų kategorijos)</li>
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">3.</span>Prieš kiekvienas rungtynes spėk rezultatą</li>
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">4.</span>Po kiekvienų rungtynių taškai pridedami automatiškai</li>
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">5.</span>Sek savo poziciją Lyderių skiltyje</li>
+      <RuleSection icon={CheckCircle2} title="Kaip dalyvauti" color="#54130E">
+        <ol className="space-y-2 text-sm text-[#441514]">
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#54130E]">1.</span>Užsiregistruok ir pasirink savo įmonę (arba „Be įmonės")</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#54130E]">2.</span>Iki turnyro pradžios suvesk turnyro prognozes (čempionas + 4 žaidėjų kategorijos)</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#54130E]">3.</span>Prieš kiekvienas rungtynes spėk rezultatą</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#54130E]">4.</span>Po kiekvienų rungtynių taškai pridedami automatiškai</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#54130E]">5.</span>Sek savo poziciją Lyderių skiltyje</li>
         </ol>
       </RuleSection>
 
       {/* Rungtynių prognozės - taškai */}
-      <RuleSection icon={Target} title="Rungtynių prognozės" color="#0e6b47">
-        <p className="text-xs text-[#6b6359] mb-3">
+      <RuleSection icon={Target} title="Rungtynių prognozės" color="#54130E">
+        <p className="text-xs text-[#845641] mb-3">
           Už kiekvienas pasibaigusias rungtynes gauni taškų pagal tai, kaip arti tikro rezultato atspėjai.
         </p>
         <div>
           <PointsRow
             label="Tikslus rezultatas"
             points={5}
-            color="#0e6b47"
+            color="#54130E"
             example="Tikras 2:1 · spėjai 2:1 → +5 tšk." />
           <PointsRow
             label="Teisingas įvarčių skirtumas"
             points={3}
-            color="#b8860b"
+            color="#D1A974"
             example="Tikras 2:1 · spėjai 3:2 (abiejų skirtumas +1) → +3 tšk." />
           <PointsRow
             label="Tik teisinga baigtis (nugalėtojas arba lygiosios)"
             points={2}
-            color="#0a2c4e"
+            color="#54130E"
             example="Tikras 2:1 · spėjai 4:1 (abiem atvejais nugali šeimininkai) → +2 tšk." />
           <PointsRow
             label="Pro šalį"
             points={0}
-            color="#9d9489"
+            color="#A88A6F"
             example="Tikras 2:1 · spėjai 1:2 (kita baigtis) → 0 tšk." />
         </div>
-        <div className="mt-3 rounded-lg bg-[#0e6b47]/5 border border-[#0e6b47]/15 p-3">
-          <p className="text-xs text-[#1a1410]">
+        <div className="mt-3 rounded-lg bg-[#54130E]/5 border border-[#54130E]/15 p-3">
+          <p className="text-xs text-[#441514]">
             <strong>Pastaba:</strong> jei nespėjai pažymėti spėjimo iki rungtynių pradžios — gauni 0 tšk., bet tai nenutraukia „serijos" skaičiavimo nuo kitų rungtynių.
           </p>
         </div>
       </RuleSection>
 
       {/* Turnyro prognozės - taškai */}
-      <RuleSection icon={Crown} title="Turnyro prognozės" color="#b8860b">
-        <p className="text-xs text-[#6b6359] mb-3">
+      <RuleSection icon={Crown} title="Turnyro prognozės" color="#D1A974">
+        <p className="text-xs text-[#845641] mb-3">
           Vienkartinės prognozės prieš turnyro pradžią. Prasidėjus turnyrui <strong>nebegalima keisti</strong>.
         </p>
         <div>
           <PointsRow
             label="Čempionas"
             points={25}
-            color="#b8860b"
+            color="#D1A974"
             example="Spėk komandą, kuri laimės finalą" />
           <PointsRow
             label="Geriausias turnyro žaidėjas"
             points={15}
-            color="#b8860b"
+            color="#D1A974"
             example={'FIFA „Auksinio kamuolio" laimėtojas'} />
           <PointsRow
             label="Daugiausiai įvarčių įmušęs žaidėjas"
             points={15}
-            color="#0e6b47"
+            color="#54130E"
             example={'FIFA „Auksinio bato" laimėtojas'} />
           <PointsRow
             label="Geriausias vartininkas"
             points={15}
-            color="#0a2c4e"
+            color="#54130E"
             example={'FIFA „Auksinės pirštinės" laimėtojas'} />
           <PointsRow
             label="Geriausias 21 m. ar jaunesnis žaidėjas"
             points={15}
-            color="#c8302e"
+            color="#6A1107"
             example="FIFA geriausio jauno žaidėjo apdovanojimas" />
         </div>
-        <div className="mt-3 rounded-lg bg-[#b8860b]/5 border border-[#b8860b]/15 p-3">
-          <p className="text-xs text-[#1a1410]">
+        <div className="mt-3 rounded-lg bg-[#D1A974]/5 border border-[#D1A974]/15 p-3">
+          <p className="text-xs text-[#441514]">
             <strong>Maksimumas už turnyro prognozes:</strong> 25 + 4×15 = <span className="font-mono font-bold">85 tšk.</span>
           </p>
-          <p className="text-[11px] text-[#6b6359] mt-1">
+          <p className="text-[11px] text-[#845641] mt-1">
             Žaidėjų vardai lyginami neatsižvelgiant į raidžių registrą ir tarpus (pvz., „MESSI", „messi", „Lionel Messi" — laikomi tuo pačiu, jei administratorius įvedė tinkamai).
           </p>
         </div>
       </RuleSection>
 
       {/* Terminai */}
-      <RuleSection icon={Lock} title="Spėjimų terminai" color="#c8302e">
+      <RuleSection icon={Lock} title="Spėjimų terminai" color="#6A1107">
         <div className="space-y-3">
           <div>
-            <div className="text-sm font-bold text-[#1a1410] mb-1">Rungtynių spėjimai</div>
-            <p className="text-xs text-[#6b6359] leading-relaxed">
+            <div className="text-sm font-bold text-[#441514] mb-1">Rungtynių spėjimai</div>
+            <p className="text-xs text-[#845641] leading-relaxed">
               Galima keisti iki rungtynių pradžios. Vos rungtynės prasideda — spėjimas užšaldomas. Tai tikrinama serveryje, tad apeiti negalima.
             </p>
           </div>
           <div>
-            <div className="text-sm font-bold text-[#1a1410] mb-1">Turnyro prognozės</div>
-            <p className="text-xs text-[#6b6359] leading-relaxed">
-              Galima keisti iki <span className="font-mono font-bold text-[#1a1410]">2026-06-11 03:00 LT</span> (turnyro pradžios). Po šio momento prognozės užšaldomos visam laikui. Spėti reikia iki turnyro atidarymo dienos.
+            <div className="text-sm font-bold text-[#441514] mb-1">Turnyro prognozės</div>
+            <p className="text-xs text-[#845641] leading-relaxed">
+              Galima keisti iki <span className="font-mono font-bold text-[#441514]">2026-06-11 03:00 LT</span> (turnyro pradžios). Po šio momento prognozės užšaldomos visam laikui. Spėti reikia iki turnyro atidarymo dienos.
             </p>
           </div>
         </div>
       </RuleSection>
 
       {/* Serija */}
-      <RuleSection icon={Flame} title="Serija" color="#f5d27a">
-        <p className="text-sm text-[#1a1410] leading-relaxed">
+      <RuleSection icon={Flame} title="Serija" color="#D1A974">
+        <p className="text-sm text-[#441514] leading-relaxed">
           Serija — kelios iš eilės atspėtos rungtynės (bent 2 tšk. už kiekvienas). Skaičiuojama atgal nuo paskutinių pasibaigusių rungtynių. Pirmas 0 tšk. spėjimas nutraukia seriją.
         </p>
-        <div className="mt-3 text-[11px] text-[#6b6359]">
-          <strong>Pavyzdys:</strong> jei trejos paskutinės rungtynės davė tau 3, 2, 5 tšk., o ketvirtos — 0 tšk., tavo serija lygi <span className="font-mono font-bold text-[#f5d27a]">3</span>.
+        <div className="mt-3 text-[11px] text-[#845641]">
+          <strong>Pavyzdys:</strong> jei trejos paskutinės rungtynės davė tau 3, 2, 5 tšk., o ketvirtos — 0 tšk., tavo serija lygi <span className="font-mono font-bold text-[#D1A974]">3</span>.
         </div>
       </RuleSection>
 
       {/* Lyderių lentelė */}
-      <RuleSection icon={BarChart3} title="Lyderių lentelė" color="#0a2c4e">
+      <RuleSection icon={BarChart3} title="Lyderių lentelė" color="#54130E">
         <div className="space-y-3">
           <div>
-            <div className="text-sm font-bold text-[#1a1410] mb-1">Bendra — pagal asmeninius taškus</div>
-            <p className="text-xs text-[#6b6359]">
+            <div className="text-sm font-bold text-[#441514] mb-1">Bendra — pagal asmeninius taškus</div>
+            <p className="text-xs text-[#845641]">
               Bendros sumos rikiuojamos mažėjimo tvarka. Iš viso = rungtynių taškai + turnyro prognozių taškai.
             </p>
           </div>
           <div>
-            <div className="text-sm font-bold text-[#1a1410] mb-1">Įmonės — pagal vidurkį vienam dalyviui</div>
-            <p className="text-xs text-[#6b6359]">
+            <div className="text-sm font-bold text-[#441514] mb-1">Įmonės — pagal vidurkį vienam dalyviui</div>
+            <p className="text-xs text-[#845641]">
               Sudedami visų įmonės dalyvių taškai ir dalijami iš dalyvių skaičiaus. Taip mažos įmonės sąžiningai varžosi su didelėmis — kolektyvo dydis nesuteikia pranašumo.
             </p>
           </div>
@@ -1895,40 +1956,40 @@ const RulesScreen = () => {
       </RuleSection>
 
       {/* Grupių etapas */}
-      <RuleSection icon={Shield} title="Grupių etapas" color="#0e6b47">
-        <p className="text-sm text-[#1a1410] leading-relaxed mb-3">
+      <RuleSection icon={Shield} title="Grupių etapas" color="#54130E">
+        <p className="text-sm text-[#441514] leading-relaxed mb-3">
           12 grupių (A–L) po 4 komandas, kiekviena žaidžia su kitomis grupės narėmis (3 rungtynės kiekvienai komandai = iš viso 72 grupių etapo rungtynės).
         </p>
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-3 rounded-full bg-[#0e6b47]" />
-            <span className="text-[#1a1410]"><strong>1-2 vieta</strong> — tiesiogiai į atkrintamųjų varžybų etapą (1/16 finalo)</span>
+            <span className="w-2 h-3 rounded-full bg-[#54130E]" />
+            <span className="text-[#441514]"><strong>1-2 vieta</strong> — tiesiogiai į atkrintamųjų varžybų etapą (1/16 finalo)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-3 rounded-full bg-[#b8860b]" />
-            <span className="text-[#1a1410]"><strong>3 vieta</strong> — 8 geriausios (iš 12) taip pat patenka į atkrintamąsias</span>
+            <span className="w-2 h-3 rounded-full bg-[#D1A974]" />
+            <span className="text-[#441514]"><strong>3 vieta</strong> — 8 geriausios (iš 12) taip pat patenka į atkrintamąsias</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-3 rounded-full bg-[#9d9489]" />
-            <span className="text-[#1a1410]"><strong>4 vieta</strong> — iškrenta iš turnyro</span>
+            <span className="w-2 h-3 rounded-full bg-[#A88A6F]" />
+            <span className="text-[#441514]"><strong>4 vieta</strong> — iškrenta iš turnyro</span>
           </div>
         </div>
-        <div className="mt-3 rounded-lg bg-[#0e6b47]/5 border border-[#0e6b47]/15 p-3">
-          <div className="text-[11px] font-bold text-[#1a1410] uppercase tracking-wider mb-1">Rikiavimo tvarka</div>
-          <ol className="text-[11px] text-[#6b6359] space-y-0.5 ml-4 list-decimal">
+        <div className="mt-3 rounded-lg bg-[#54130E]/5 border border-[#54130E]/15 p-3">
+          <div className="text-[11px] font-bold text-[#441514] uppercase tracking-wider mb-1">Rikiavimo tvarka</div>
+          <ol className="text-[11px] text-[#845641] space-y-0.5 ml-4 list-decimal">
             <li>Taškai (3 už pergalę, 1 už lygiąsias)</li>
             <li>Įvarčių skirtumas (įmušti − praleisti)</li>
             <li>Įmušti įvarčiai</li>
           </ol>
-          <p className="text-[10px] text-[#6b6359] mt-2 italic">
+          <p className="text-[10px] text-[#845641] mt-2 italic">
             Pastaba: FIFA naudoja papildomus kriterijus (tarpusavio rungtynės, drausmės taškai, burtai), bet retais atvejais — ši aplikacija rodo paprastesnę versiją.
           </p>
         </div>
       </RuleSection>
 
       {/* Atkrintamųjų varžybų etapas */}
-      <RuleSection icon={Award} title="Atkrintamųjų varžybų etapas" color="#0a2c4e">
-        <p className="text-sm text-[#1a1410] leading-relaxed mb-3">
+      <RuleSection icon={Award} title="Atkrintamųjų varžybų etapas" color="#54130E">
+        <p className="text-sm text-[#441514] leading-relaxed mb-3">
           32 komandos atkrenta vienos su kitomis. Lygiosios pagrindinio laiko pabaigoje → pratęsimas → 11 m. baudinių serija.
         </p>
         <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1940,21 +2001,21 @@ const RulesScreen = () => {
             { stage: 'Dėl 3 vietos', matches: 1, dates: '2026-07-18' },
             { stage: 'Finalas', matches: 1, dates: '2026-07-19' },
           ].map((s) => (
-            <div key={s.stage} className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
-              <div className="font-bold text-[#1a1410]">{s.stage}</div>
-              <div className="text-[10px] text-[#6b6359]">{s.matches} {pluralizeLt(s.matches, ['rungtynės', 'rungtynės', 'rungtynių'])}</div>
-              <div className="text-[10px] text-[#6b6359]">{s.dates}</div>
+            <div key={s.stage} className="rounded-lg bg-[#54130E]/5 px-3 py-2">
+              <div className="font-bold text-[#441514]">{s.stage}</div>
+              <div className="text-[10px] text-[#845641]">{s.matches} {pluralizeLt(s.matches, ['rungtynės', 'rungtynės', 'rungtynių'])}</div>
+              <div className="text-[10px] text-[#845641]">{s.dates}</div>
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-[#6b6359] mt-3">
+        <p className="text-[11px] text-[#845641] mt-3">
           Spėjimams galioja ta pati skaičiavimo logika kaip ir grupių etape (5/3/2 tšk.). Po 11 m. baudinių serijos rezultatas fiksuojamas pagal pagrindinio laiko pabaigą (paprastai 1:1, 2:2 ir pan.).
         </p>
       </RuleSection>
 
       {/* Kontaktas / klausimai */}
-      <RuleSection icon={AlertCircle} title="Klausimai?" color="#b8860b">
-        <p className="text-sm text-[#1a1410] leading-relaxed">
+      <RuleSection icon={AlertCircle} title="Klausimai?" color="#D1A974">
+        <p className="text-sm text-[#441514] leading-relaxed">
           Jei radai klaidą, ko nors trūksta arba reikia daugiau funkcijų — susisiek su administratoriumi. Šis totalizatorius yra vidinis, todėl visi atnaujinimai daromi pagal dalyvių pasiūlymus.
         </p>
       </RuleSection>
@@ -1999,10 +2060,10 @@ const calculateStandings = (groupTeams, groupMatches) => {
 
 // Spalvos pozicijai: 1-2 vieta - kvalifikuojasi (žalia), 3 vieta - galimai geriausių 8 (geltona), 4 vieta - eliminuotas (pilka)
 const positionStyle = (pos) => {
-  if (pos === 1) return { dot: '#0e6b47', label: 'text-[#0e6b47]' };
-  if (pos === 2) return { dot: '#0e6b47', label: 'text-[#0e6b47]' };
-  if (pos === 3) return { dot: '#b8860b', label: 'text-[#b8860b]' };
-  return { dot: '#9d9489', label: 'text-[#6b6359]' };
+  if (pos === 1) return { dot: '#54130E', label: 'text-[#54130E]' };
+  if (pos === 2) return { dot: '#54130E', label: 'text-[#54130E]' };
+  if (pos === 3) return { dot: '#D1A974', label: 'text-[#D1A974]' };
+  return { dot: '#A88A6F', label: 'text-[#845641]' };
 };
 
 const GroupStandingsTable = ({ groupId, teams, matches }) => {
@@ -2015,8 +2076,8 @@ const GroupStandingsTable = ({ groupId, teams, matches }) => {
   return (
     <div className="card-light rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-lg text-[#1a1410]">GRUPĖ {groupId}</h3>
-        <div className="text-[10px] text-[#6b6359] uppercase tracking-wider">
+        <h3 className="font-display text-lg text-[#441514]">GRUPĖ {groupId}</h3>
+        <div className="text-[10px] text-[#845641] uppercase tracking-wider">
           {standings.filter((s) => s.P > 0).length}/{teams.length} žaidė
         </div>
       </div>
@@ -2025,7 +2086,7 @@ const GroupStandingsTable = ({ groupId, teams, matches }) => {
       <div className="overflow-x-auto -mx-1 px-1 mb-4">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[9px] uppercase tracking-wider text-[#6b6359] border-b border-[#1a1410]/10">
+            <tr className="text-[9px] uppercase tracking-wider text-[#845641] border-b border-[#441514]/10">
               <th className="text-left py-2 w-6">#</th>
               <th className="text-left py-2">Komanda</th>
               <th className="text-center py-2 w-7" title="Žaidžiamos">Ž</th>
@@ -2042,7 +2103,7 @@ const GroupStandingsTable = ({ groupId, teams, matches }) => {
               const team = teamsByCode[s.code];
               const style = positionStyle(pos);
               return (
-                <tr key={s.code} className="border-b border-[#1a1410]/5 last:border-0">
+                <tr key={s.code} className="border-b border-[#441514]/5 last:border-0">
                   <td className="py-2">
                     <div className="flex items-center gap-1.5">
                       <span className="w-1 h-4 rounded-full" style={{ backgroundColor: style.dot }} />
@@ -2052,19 +2113,19 @@ const GroupStandingsTable = ({ groupId, teams, matches }) => {
                   <td className="py-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <Flag code={team?.code} className="w-5 h-3.5 flex-shrink-0" />
-                      <span className="text-[11px] font-semibold text-[#1a1410] truncate">
+                      <span className="text-[11px] font-semibold text-[#441514] truncate">
                         {team?.name || s.code}
                       </span>
                     </div>
                   </td>
-                  <td className="text-center font-mono text-[#6b6359]">{s.P}</td>
-                  <td className="text-center font-mono text-[#0e6b47]">{s.W}</td>
-                  <td className="text-center font-mono text-[#b8860b]">{s.D}</td>
-                  <td className="text-center font-mono text-[#c8302e]">{s.L}</td>
-                  <td className="text-center font-mono text-[#1a1410]">
+                  <td className="text-center font-mono text-[#845641]">{s.P}</td>
+                  <td className="text-center font-mono text-[#54130E]">{s.W}</td>
+                  <td className="text-center font-mono text-[#D1A974]">{s.D}</td>
+                  <td className="text-center font-mono text-[#6A1107]">{s.L}</td>
+                  <td className="text-center font-mono text-[#441514]">
                     {s.GD > 0 ? `+${s.GD}` : s.GD}
                   </td>
-                  <td className="text-center font-mono font-bold text-[#1a1410]">{s.pts}</td>
+                  <td className="text-center font-mono font-bold text-[#441514]">{s.pts}</td>
                 </tr>
               );
             })}
@@ -2073,8 +2134,8 @@ const GroupStandingsTable = ({ groupId, teams, matches }) => {
       </div>
 
       {/* Rungtynių sąrašas */}
-      <div className="border-t border-[#1a1410]/10 pt-3">
-        <div className="text-[9px] uppercase tracking-wider text-[#6b6359] mb-2">Rungtynės</div>
+      <div className="border-t border-[#441514]/10 pt-3">
+        <div className="text-[9px] uppercase tracking-wider text-[#845641] mb-2">Rungtynės</div>
         <div className="space-y-1.5">
           {sortedMatches.map((m) => {
             const home = teamsByCode[m.home];
@@ -2083,27 +2144,27 @@ const GroupStandingsTable = ({ groupId, teams, matches }) => {
             const isLive = m.status === 'live';
             return (
               <div key={m.id} className="flex items-center gap-2 text-[11px]">
-                <span className="text-[9px] text-[#6b6359] w-20 flex-shrink-0">
+                <span className="text-[9px] text-[#845641] w-20 flex-shrink-0">
                   {formatKickoff(m.kickoff).split(' · ')[0]}
                 </span>
                 <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-                  <span className="text-[#1a1410] truncate text-right">{home?.name}</span>
+                  <span className="text-[#441514] truncate text-right">{home?.name}</span>
                   <Flag code={home?.code} className="w-4 h-3 flex-shrink-0" />
                 </div>
                 <div className="font-mono text-xs font-bold w-12 text-center flex-shrink-0">
                   {isFinished ? (
-                    <span className="text-[#1a1410]">{m.actualScore.home}:{m.actualScore.away}</span>
+                    <span className="text-[#441514]">{m.actualScore.home}:{m.actualScore.away}</span>
                   ) : isLive ? (
-                    <span className="text-[#c8302e]">
+                    <span className="text-[#6A1107]">
                       {m.actualScore?.home ?? '−'}:{m.actualScore?.away ?? '−'}
                     </span>
                   ) : (
-                    <span className="text-[#9d9489]">vs</span>
+                    <span className="text-[#A88A6F]">vs</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                   <Flag code={away?.code} className="w-4 h-3 flex-shrink-0" />
-                  <span className="text-[#1a1410] truncate">{away?.name}</span>
+                  <span className="text-[#441514] truncate">{away?.name}</span>
                 </div>
               </div>
             );
@@ -2137,13 +2198,13 @@ const GroupsScreen = ({ matches }) => {
     return (
       <div className="space-y-4 pb-24 lg:pb-8">
         <div>
-          <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">GRUPĖS</h1>
-          <p className="text-sm text-[#6b6359]">12 grupių · po 4 komandas</p>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">GRUPĖS</h1>
+          <p className="text-sm text-[#845641]">12 grupių · po 4 komandas</p>
         </div>
         <div className="card-light rounded-xl p-6 text-center">
-          <AlertCircle className="w-8 h-8 text-[#b8860b] mx-auto mb-2" />
-          <p className="text-sm text-[#1a1410] font-semibold mb-1">Grupių dar nėra</p>
-          <p className="text-xs text-[#6b6359]">Administratorius dar nesukūrė PFČ 2026 rungtynių.</p>
+          <AlertCircle className="w-8 h-8 text-[#D1A974] mx-auto mb-2" />
+          <p className="text-sm text-[#441514] font-semibold mb-1">Grupių dar nėra</p>
+          <p className="text-xs text-[#845641]">Administratorius dar nesukūrė PFČ 2026 rungtynių.</p>
         </div>
       </div>
     );
@@ -2152,8 +2213,8 @@ const GroupsScreen = ({ matches }) => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">GRUPĖS</h1>
-        <p className="text-sm text-[#6b6359]">
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">GRUPĖS</h1>
+        <p className="text-sm text-[#845641]">
           {groupsData.length} grupės · po 1-2 vietą kvalifikuojasi tiesiogiai · po 3 vietą — 8 geriausi
         </p>
       </div>
@@ -2161,16 +2222,16 @@ const GroupsScreen = ({ matches }) => {
       {/* Legenda */}
       <div className="card-light rounded-xl p-3 flex flex-wrap items-center gap-4 text-[11px]">
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-3 rounded-full bg-[#0e6b47]" />
-          <span className="text-[#1a1410]">1-2 vieta — į atkrintamąsias</span>
+          <span className="w-2 h-3 rounded-full bg-[#54130E]" />
+          <span className="text-[#441514]">1-2 vieta — į atkrintamąsias</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-3 rounded-full bg-[#b8860b]" />
-          <span className="text-[#1a1410]">3 vieta — galimai (8 geriausi iš 12)</span>
+          <span className="w-2 h-3 rounded-full bg-[#D1A974]" />
+          <span className="text-[#441514]">3 vieta — galimai (8 geriausi iš 12)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-3 rounded-full bg-[#9d9489]" />
-          <span className="text-[#1a1410]">4 vieta — eliminuota</span>
+          <span className="w-2 h-3 rounded-full bg-[#A88A6F]" />
+          <span className="text-[#441514]">4 vieta — eliminuota</span>
         </div>
       </div>
 
@@ -2277,50 +2338,50 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
 
   return (
     <div className="card-light rounded-lg p-2.5 text-xs">
-      <div className="text-[9px] text-[#6b6359] mb-1.5 truncate">{formatKickoff(match.kickoff)}</div>
+      <div className="text-[9px] text-[#845641] mb-1.5 truncate">{formatKickoff(match.kickoff)}</div>
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <Flag code={home?.code} className="w-5 h-3.5 flex-shrink-0" />
-            <span className="text-[11px] font-semibold text-[#1a1410] truncate">
-              {home?.name || <span className="text-[#9d9489] italic">{getPlaceholder(match, 'home')}</span>}
+            <span className="text-[11px] font-semibold text-[#441514] truncate">
+              {home?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'home')}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
-            <span className="font-mono text-sm font-bold text-[#1a1410]">{match.actualScore.home}</span>
+            <span className="font-mono text-sm font-bold text-[#441514]">{match.actualScore.home}</span>
           ) : !isLocked && !noTeams ? (
             <div className="flex items-center gap-0.5">
               <button onClick={() => setLocalPred({ ...localPred, home: Math.max(0, localPred.home - 1) })}
-                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">−</button>
-              <span className="w-5 text-center font-mono text-xs font-bold text-[#0e6b47]">{localPred.home}</span>
+                className="w-5 h-5 rounded bg-[#441514]/5 text-[#845641] text-xs leading-none">−</button>
+              <span className="w-5 text-center font-mono text-xs font-bold text-[#54130E]">{localPred.home}</span>
               <button onClick={() => setLocalPred({ ...localPred, home: Math.min(9, localPred.home + 1) })}
-                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">+</button>
+                className="w-5 h-5 rounded bg-[#441514]/5 text-[#845641] text-xs leading-none">+</button>
             </div>
           ) : null}
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <Flag code={away?.code} className="w-5 h-3.5 flex-shrink-0" />
-            <span className="text-[11px] font-semibold text-[#1a1410] truncate">
-              {away?.name || <span className="text-[#9d9489] italic">{getPlaceholder(match, 'away')}</span>}
+            <span className="text-[11px] font-semibold text-[#441514] truncate">
+              {away?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'away')}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
-            <span className="font-mono text-sm font-bold text-[#1a1410]">{match.actualScore.away}</span>
+            <span className="font-mono text-sm font-bold text-[#441514]">{match.actualScore.away}</span>
           ) : !isLocked && !noTeams ? (
             <div className="flex items-center gap-0.5">
               <button onClick={() => setLocalPred({ ...localPred, away: Math.max(0, localPred.away - 1) })}
-                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">−</button>
-              <span className="w-5 text-center font-mono text-xs font-bold text-[#0e6b47]">{localPred.away}</span>
+                className="w-5 h-5 rounded bg-[#441514]/5 text-[#845641] text-xs leading-none">−</button>
+              <span className="w-5 text-center font-mono text-xs font-bold text-[#54130E]">{localPred.away}</span>
               <button onClick={() => setLocalPred({ ...localPred, away: Math.min(9, localPred.away + 1) })}
-                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">+</button>
+                className="w-5 h-5 rounded bg-[#441514]/5 text-[#845641] text-xs leading-none">+</button>
             </div>
           ) : null}
         </div>
       </div>
       {!isLocked && !noTeams && hasChanges && (
         <button onClick={handleSave} disabled={saving}
-          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
           className="w-full mt-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1">
           {saving && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
           Patvirtinti
@@ -2328,18 +2389,18 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
       )}
       {match.status === 'finished' && pointsResult && (
         <div className="mt-1.5 text-center">
-          <span className="text-[9px] text-[#6b6359]">
+          <span className="text-[9px] text-[#845641]">
             Spėjo {prediction ? `${prediction.home}:${prediction.away}` : '−'} ·
           </span>
           <span className="text-[9px] font-bold ml-1" style={{
-            color: pointsResult.type === 'exact' ? '#0e6b47' :
-                   pointsResult.type === 'diff' ? '#b8860b' :
-                   pointsResult.type === 'outcome' ? '#0a2c4e' : '#9d9489'
+            color: pointsResult.type === 'exact' ? '#54130E' :
+                   pointsResult.type === 'diff' ? '#D1A974' :
+                   pointsResult.type === 'outcome' ? '#54130E' : '#A88A6F'
           }}>+{pointsResult.pts} tšk.</span>
         </div>
       )}
       {isLocked && !pointsResult && prediction && (
-        <div className="mt-1.5 text-center text-[9px] text-[#6b6359]">
+        <div className="mt-1.5 text-center text-[9px] text-[#845641]">
           Spėjo {prediction.home}:{prediction.away}
         </div>
       )}
@@ -2367,13 +2428,13 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
     return (
       <div className="space-y-4 pb-24 lg:pb-8">
         <div>
-          <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">ATKRITIMO ETAPAS</h1>
-          <p className="text-sm text-[#6b6359]">1/16 finalas · Aštuntfinalis · ... · Finalas</p>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRITIMO ETAPAS</h1>
+          <p className="text-sm text-[#845641]">1/16 finalas · Aštuntfinalis · ... · Finalas</p>
         </div>
         <div className="card-light rounded-xl p-6 text-center">
-          <AlertCircle className="w-8 h-8 text-[#b8860b] mx-auto mb-2" />
-          <p className="text-sm text-[#1a1410] font-semibold mb-1">Atkrintamųjų varžybų etapas dar nesukurtas</p>
-          <p className="text-xs text-[#6b6359]">Administratorius gali sukurti struktūrą administratoriaus skydelyje.</p>
+          <AlertCircle className="w-8 h-8 text-[#D1A974] mx-auto mb-2" />
+          <p className="text-sm text-[#441514] font-semibold mb-1">Atkrintamųjų varžybų etapas dar nesukurtas</p>
+          <p className="text-xs text-[#845641]">Administratorius gali sukurti struktūrą administratoriaus skydelyje.</p>
         </div>
       </div>
     );
@@ -2382,8 +2443,8 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">ATKRITIMO ETAPAS</h1>
-        <p className="text-sm text-[#6b6359]">{knockoutMatches.length} rungtynių · spėk visus etapus</p>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRITIMO ETAPAS</h1>
+        <p className="text-sm text-[#845641]">{knockoutMatches.length} rungtynių · spėk visus etapus</p>
       </div>
 
       {/* Mobile: stack vertically. Desktop: horizontal scroll bracket */}
@@ -2394,7 +2455,7 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
             if (!stageMatches || stageMatches.length === 0) return null;
             return (
               <div key={stage} className="lg:w-64 lg:flex-shrink-0">
-                <div className="font-display text-xs uppercase tracking-wider text-[#0a2c4e] mb-3 px-1">
+                <div className="font-display text-xs uppercase tracking-wider text-[#54130E] mb-3 px-1">
                   {STAGE_LABELS[stage]}
                 </div>
                 <div className="space-y-2 lg:flex lg:flex-col lg:justify-around lg:h-full">
@@ -2491,7 +2552,7 @@ const AdminCompaniesPanel = ({ companies, users }) => {
     <div className="space-y-3">
       {/* Pridėti naują */}
       <div className="card-light rounded-xl p-4">
-        <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-3">Nauja įmonė</div>
+        <div className="font-display text-sm uppercase tracking-wider text-[#441514] mb-3">Nauja įmonė</div>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
@@ -2500,7 +2561,7 @@ const AdminCompaniesPanel = ({ companies, users }) => {
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             placeholder="Pilnas pavadinimas, pvz., Vakarų Medienos Grupė"
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-sm focus:outline-none focus:border-[#0e6b47]/50 disabled:opacity-50" />
+            className="flex-1 px-3 py-2 rounded-lg bg-[#FFFFFF] border border-[#441514]/10 text-sm focus:outline-none focus:border-[#54130E]/50 disabled:opacity-50" />
           <input
             type="text"
             value={newCode}
@@ -2509,17 +2570,17 @@ const AdminCompaniesPanel = ({ companies, users }) => {
             placeholder="Trumpinys (VMG)"
             disabled={busy}
             maxLength={6}
-            className="sm:w-32 px-3 py-2 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-sm font-mono uppercase focus:outline-none focus:border-[#0e6b47]/50 disabled:opacity-50" />
+            className="sm:w-32 px-3 py-2 rounded-lg bg-[#FFFFFF] border border-[#441514]/10 text-sm font-mono uppercase focus:outline-none focus:border-[#54130E]/50 disabled:opacity-50" />
           <button
             onClick={handleCreate}
             disabled={busy || !newName.trim()}
-            style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+            style={{ backgroundColor: '#54130E', color: '#ffffff' }}
             className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             <Plus className="w-3.5 h-3.5" /> Pridėti
           </button>
         </div>
-        <p className="text-[10px] text-[#6b6359] mt-2">
+        <p className="text-[10px] text-[#845641] mt-2">
           Trumpinys (max 6 simbolių, automatiškai didžiosiomis) rodomas ikonose. Jei nepateiksi - bus naudojama pirma pavadinimo raidė.
         </p>
       </div>
@@ -2527,7 +2588,7 @@ const AdminCompaniesPanel = ({ companies, users }) => {
       {/* Sąrašas */}
       {companies.length === 0 ? (
         <div className="card-light rounded-xl p-5 text-center">
-          <p className="text-sm text-[#6b6359]">Įmonių dar nėra. Pridėk pirmąją virš.</p>
+          <p className="text-sm text-[#845641]">Įmonių dar nėra. Pridėk pirmąją virš.</p>
         </div>
       ) : (
         <div className="card-light rounded-xl overflow-hidden">
@@ -2540,8 +2601,8 @@ const AdminCompaniesPanel = ({ companies, users }) => {
               ? 'w-auto min-w-[44px] px-2 h-9 text-xs'
               : 'w-9 h-9 text-sm';
             return (
-              <div key={c.id} className="flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0">
-                <div className={`${iconClass} rounded-lg flex items-center justify-center font-display bg-[#0a2c4e]/10 text-[#0a2c4e] flex-shrink-0 font-mono tracking-tight`}>
+              <div key={c.id} className="flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0">
+                <div className={`${iconClass} rounded-lg flex items-center justify-center font-display bg-[#54130E]/10 text-[#54130E] flex-shrink-0 font-mono tracking-tight`}>
                   {abbrev}
                 </div>
                 {isEditing ? (
@@ -2554,7 +2615,7 @@ const AdminCompaniesPanel = ({ companies, users }) => {
                       autoFocus
                       disabled={busy}
                       placeholder="Pavadinimas"
-                      className="flex-1 px-3 py-1.5 rounded border border-[#0e6b47]/40 text-sm focus:outline-none focus:border-[#0e6b47]" />
+                      className="flex-1 px-3 py-1.5 rounded border border-[#54130E]/40 text-sm focus:outline-none focus:border-[#54130E]" />
                     <input
                       type="text"
                       value={editCode}
@@ -2563,13 +2624,13 @@ const AdminCompaniesPanel = ({ companies, users }) => {
                       disabled={busy}
                       maxLength={6}
                       placeholder="Trumpinys"
-                      className="sm:w-28 px-3 py-1.5 rounded border border-[#0e6b47]/40 text-sm font-mono uppercase focus:outline-none focus:border-[#0e6b47]" />
+                      className="sm:w-28 px-3 py-1.5 rounded border border-[#54130E]/40 text-sm font-mono uppercase focus:outline-none focus:border-[#54130E]" />
                   </div>
                 ) : (
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-[#1a1410] truncate">{c.name}</div>
-                    <div className="text-[10px] text-[#6b6359]">
-                      {c.code ? <span className="font-mono text-[#0a2c4e]">{c.code}</span> : <span className="opacity-60 italic">be trumpinio</span>}
+                    <div className="text-sm font-semibold text-[#441514] truncate">{c.name}</div>
+                    <div className="text-[10px] text-[#845641]">
+                      {c.code ? <span className="font-mono text-[#54130E]">{c.code}</span> : <span className="opacity-60 italic">be trumpinio</span>}
                       {' · '}
                       {count} {pluralizeLt(count, ['dalyvis', 'dalyviai', 'dalyvių'])}
                     </div>
@@ -2578,23 +2639,23 @@ const AdminCompaniesPanel = ({ companies, users }) => {
                 {isEditing ? (
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={handleSaveEdit} disabled={busy || !editName.trim()}
-                      style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+                      style={{ backgroundColor: '#54130E', color: '#ffffff' }}
                       className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50">
                       Saugoti
                     </button>
                     <button onClick={() => { setEditingId(null); setEditName(''); setEditCode(''); }}
-                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white border border-[#1a1410]/15">
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white border border-[#441514]/15">
                       Atš.
                     </button>
                   </div>
                 ) : (
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => { setEditingId(c.id); setEditName(c.name); setEditCode(c.code || ''); }}
-                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#0a2c4e] hover:bg-[#0a2c4e]/5">
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#54130E] hover:bg-[#54130E]/5">
                       Keisti
                     </button>
                     <button onClick={() => handleDelete(c)} disabled={busy}
-                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#c8302e] hover:bg-[#c8302e]/5 disabled:opacity-50">
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#6A1107] hover:bg-[#6A1107]/5 disabled:opacity-50">
                       Trinti
                     </button>
                   </div>
@@ -2707,19 +2768,19 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
     <div className="space-y-3">
       {/* Privatumo migracija - tik jei yra senos schemos vartotojų */}
       {usersNeedingMigration > 0 && (
-        <div className="card-light rounded-xl p-4 bg-[#b8860b]/5 border-[#b8860b]/30">
+        <div className="card-light rounded-xl p-4 bg-[#D1A974]/5 border-[#D1A974]/30">
           <div className="flex items-start gap-2 mb-3">
-            <AlertCircle className="w-4 h-4 text-[#b8860b] flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-[#1a1410]">
+            <AlertCircle className="w-4 h-4 text-[#D1A974] flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-[#441514]">
               <div className="font-bold mb-1">{usersNeedingMigration} vartotojų turi senos struktūros asmeninius duomenis</div>
-              <p className="text-[11px] text-[#6b6359]">
+              <p className="text-[11px] text-[#845641]">
                 Jų el. paštas ir vardas/pavardė yra viešuose dokumentuose ir gali būti matomi kitiems prisijungusiems
                 vartotojams per naršyklės įrankius. Paspausk mygtuką, kad perkeltum juos į privačius dokumentus.
               </p>
             </div>
           </div>
           <button onClick={handleMigrate} disabled={migrating}
-            style={{ backgroundColor: '#b8860b', color: '#ffffff' }}
+            style={{ backgroundColor: '#D1A974', color: '#ffffff' }}
             className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2">
             {migrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Perkelti privačius duomenis ({usersNeedingMigration})
@@ -2732,11 +2793,11 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Ieškoti pagal vardą, el. paštą..."
-        className="w-full px-3 py-2 rounded-lg bg-white border border-[#1a1410]/10 text-sm focus:outline-none focus:border-[#0e6b47]/50" />
+        className="w-full px-3 py-2 rounded-lg bg-white border border-[#441514]/10 text-sm focus:outline-none focus:border-[#54130E]/50" />
 
       {filteredUsers.length === 0 ? (
         <div className="card-light rounded-xl p-5 text-center">
-          <p className="text-sm text-[#6b6359]">Vartotojų nerasta</p>
+          <p className="text-sm text-[#845641]">Vartotojų nerasta</p>
         </div>
       ) : (
         <div className="card-light rounded-xl overflow-hidden">
@@ -2744,22 +2805,22 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
             const isBusy = busyUid === u.uid;
             const isMe = u.uid === currentUid;
             return (
-              <div key={u.uid} className="p-3 border-b border-[#1a1410]/8 last:border-0">
+              <div key={u.uid} className="p-3 border-b border-[#441514]/8 last:border-0">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm flex-shrink-0"
                     style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
                     {u.avatarLetter}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-[#1a1410] truncate">
-                      {u.username} {isMe && <span className="text-[10px] text-[#6b6359]">(tu)</span>}
+                    <div className="text-sm font-semibold text-[#441514] truncate">
+                      {u.username} {isMe && <span className="text-[10px] text-[#845641]">(tu)</span>}
                     </div>
-                    <div className="text-[10px] text-[#6b6359] truncate">{u.email}</div>
+                    <div className="text-[10px] text-[#845641] truncate">{u.email}</div>
                   </div>
                   {u.isAdmin && (
-                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#0a2c4e]/10 border border-[#0a2c4e]/30 flex-shrink-0">
-                      <Settings className="w-2.5 h-2.5 text-[#0a2c4e]" />
-                      <span className="text-[9px] font-bold text-[#0a2c4e] uppercase tracking-wider">Admin</span>
+                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#54130E]/10 border border-[#54130E]/30 flex-shrink-0">
+                      <Settings className="w-2.5 h-2.5 text-[#54130E]" />
+                      <span className="text-[9px] font-bold text-[#54130E] uppercase tracking-wider">Admin</span>
                     </div>
                   )}
                 </div>
@@ -2768,7 +2829,7 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
                     value={u.companyId || ''}
                     onChange={(e) => handleChangeCompany(u, e.target.value || null)}
                     disabled={isBusy}
-                    className="flex-1 px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white disabled:opacity-50">
+                    className="flex-1 px-2 py-1.5 rounded border border-[#441514]/15 text-xs bg-white disabled:opacity-50">
                     <option value="">Be įmonės</option>
                     {companies.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -2780,8 +2841,8 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
                     onClick={() => handleToggleAdmin(u)}
                     disabled={isBusy}
                     style={u.isAdmin
-                      ? { backgroundColor: '#ffffff', color: '#c8302e', border: '1px solid rgba(200, 48, 46, 0.3)' }
-                      : { backgroundColor: '#0a2c4e', color: '#ffffff' }}
+                      ? { backgroundColor: '#ffffff', color: '#6A1107', border: '1px solid rgba(106, 17, 7, 0.3)' }
+                      : { backgroundColor: '#54130E', color: '#ffffff' }}
                     className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
                     {isBusy && <Loader2 className="w-3 h-3 animate-spin" />}
                     {u.isAdmin ? 'Atimti teises' : 'Suteikti teises'}
@@ -2869,16 +2930,16 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
   };
 
   const fields = [
-    { key: 'bestPlayer', label: 'Geriausias žaidėjas', points: 15, color: '#b8860b' },
-    { key: 'topScorer', label: 'Daugiausiai įvarčių', points: 15, color: '#0e6b47' },
-    { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', points: 15, color: '#0a2c4e' },
-    { key: 'bestYoungPlayer', label: 'Geriausias 21m. ar jaunesnis', points: 15, color: '#c8302e' },
+    { key: 'bestPlayer', label: 'Geriausias žaidėjas', points: 15, color: '#D1A974' },
+    { key: 'topScorer', label: 'Daugiausiai įvarčių', points: 15, color: '#54130E' },
+    { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', points: 15, color: '#54130E' },
+    { key: 'bestYoungPlayer', label: 'Geriausias 21m. ar jaunesnis', points: 15, color: '#6A1107' },
   ];
 
   return (
     <div className="space-y-3">
-      <div className="card-light rounded-xl p-4 bg-[#0a2c4e]/5 border-[#0a2c4e]/20">
-        <p className="text-xs text-[#1a1410]">
+      <div className="card-light rounded-xl p-4 bg-[#54130E]/5 border-[#54130E]/20">
+        <p className="text-xs text-[#441514]">
           <strong>Pastaba:</strong> įvedus tikrus laimėtojus, visiems dalyviams automatiškai pridedami taškai už atitinkančias prognozes. Vardai lyginami neatsižvelgiant į raidžių registrą ir tarpus. Patikrink vardus prieš įrašydamas.
         </p>
       </div>
@@ -2887,21 +2948,21 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
       <div className="card-light rounded-xl p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Crown className="w-4 h-4 text-[#b8860b]" />
-            <span className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Čempionas</span>
+            <Crown className="w-4 h-4 text-[#D1A974]" />
+            <span className="font-display text-sm uppercase tracking-wider text-[#441514]">Čempionas</span>
           </div>
-          <span className="text-[10px] font-bold text-[#b8860b] uppercase tracking-wider">25 tšk.</span>
+          <span className="text-[10px] font-bold text-[#D1A974] uppercase tracking-wider">25 tšk.</span>
         </div>
         <select value={form.champion}
           onChange={(e) => setForm({ ...form, champion: e.target.value })}
-          className="w-full px-3 py-2 rounded-lg bg-white border border-[#1a1410]/15 text-sm focus:outline-none focus:border-[#0e6b47]/50">
+          className="w-full px-3 py-2 rounded-lg bg-white border border-[#441514]/15 text-sm focus:outline-none focus:border-[#54130E]/50">
           <option value="">— Nenustatyta —</option>
           {allCountries.map((code) => (
             <option key={code} value={code}>{teamsByCode[code].name}</option>
           ))}
         </select>
         {form.champion && (
-          <div className="mt-2 text-[10px] text-[#6b6359]">
+          <div className="mt-2 text-[10px] text-[#845641]">
             {winnerCounts.champion} {pluralizeLt(winnerCounts.champion, ['dalyvis atspėjo', 'dalyviai atspėjo', 'dalyvių atspėjo'])} → +25 tšk. kiekvienam
           </div>
         )}
@@ -2911,16 +2972,16 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
       {fields.map(({ key, label, points, color }) => (
         <div key={key} className="card-light rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-display text-sm uppercase tracking-wider text-[#1a1410]">{label}</span>
+            <span className="font-display text-sm uppercase tracking-wider text-[#441514]">{label}</span>
             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{points} tšk.</span>
           </div>
           <input type="text"
             value={form[key]}
             onChange={(e) => setForm({ ...form, [key]: e.target.value })}
             placeholder="pvz., Lionel Messi"
-            className="w-full px-3 py-2 rounded-lg bg-white border border-[#1a1410]/15 text-sm focus:outline-none focus:border-[#0e6b47]/50" />
+            className="w-full px-3 py-2 rounded-lg bg-white border border-[#441514]/15 text-sm focus:outline-none focus:border-[#54130E]/50" />
           {form[key] && (
-            <div className="mt-2 text-[10px] text-[#6b6359]">
+            <div className="mt-2 text-[10px] text-[#845641]">
               {winnerCounts[key]} {pluralizeLt(winnerCounts[key], ['dalyvis atspėjo', 'dalyviai atspėjo', 'dalyvių atspėjo'])} → +{points} tšk. kiekvienam
             </div>
           )}
@@ -2929,8 +2990,8 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
 
       <button onClick={handleSave} disabled={saving || justSaved}
         style={justSaved
-          ? { backgroundColor: '#0e6b47', color: '#ffffff' }
-          : { backgroundColor: '#0a2c4e', color: '#ffffff' }}
+          ? { backgroundColor: '#54130E', color: '#ffffff' }
+          : { backgroundColor: '#54130E', color: '#ffffff' }}
         className="w-full py-3 rounded-xl font-display uppercase tracking-wider text-xs disabled:opacity-60 flex items-center justify-center gap-2">
         {saving && <Loader2 className="w-4 h-4 animate-spin" />}
         {justSaved && <CheckCircle2 className="w-4 h-4" />}
@@ -3101,20 +3162,20 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div className="flex items-center gap-3">
-        <button onClick={onClose} className="text-[#6b6359] hover:text-[#1a1410]">
+        <button onClick={onClose} className="text-[#845641] hover:text-[#441514]">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="font-display text-2xl text-[#1a1410]">ADMIN</h1>
-          <p className="text-xs text-[#6b6359]">{tabSubtitle}</p>
+          <h1 className="font-display text-2xl text-[#441514]">ADMIN</h1>
+          <p className="text-xs text-[#845641]">{tabSubtitle}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-[#1a1410]/5">
+      <div className="flex gap-1 p-1 rounded-xl bg-[#441514]/5">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={tab === t.id ? { backgroundColor: '#ffffff', color: '#1a1410' } : { color: '#6b6359' }}
+            style={tab === t.id ? { backgroundColor: '#ffffff', color: '#441514' } : { color: '#845641' }}
             className="flex-1 py-2 px-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all">
             {t.label}
           </button>
@@ -3129,23 +3190,23 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
       {tab === 'matches' && (
         <>
       {/* API sinchronizavimas - svarbiausias mygtukas */}
-      <div className="card-light rounded-xl p-4 space-y-3" style={{ borderLeft: '3px solid #0e6b47' }}>
+      <div className="card-light rounded-xl p-4 space-y-3" style={{ borderLeft: '3px solid #54130E' }}>
         <div>
-          <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-1 flex items-center gap-2">
-            <Radio className="w-4 h-4 text-[#0e6b47]" />
+          <div className="font-display text-sm uppercase tracking-wider text-[#441514] mb-1 flex items-center gap-2">
+            <Radio className="w-4 h-4 text-[#54130E]" />
             Rezultatų sinchronizacija
           </div>
-          <p className="text-[11px] text-[#6b6359]">Paspausk po kiekvienos rungtynių dienos — automatiškai atnaujins baigtas ar vykstančias rungtynes iš oficialaus FIFA duomenų tiekėjo (football-data.org).</p>
+          <p className="text-[11px] text-[#845641]">Paspausk po kiekvienos rungtynių dienos — automatiškai atnaujins baigtas ar vykstančias rungtynes iš oficialaus FIFA duomenų tiekėjo (football-data.org).</p>
         </div>
 
         <button onClick={handleSyncFromAPI} disabled={seeding}
-          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
           className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Atnaujinti rezultatus iš API
         </button>
 
-        <p className="text-[10px] text-[#6b6359]">
+        <p className="text-[10px] text-[#845641]">
           💡 Jei API neveikia, žemiau bet kada gali įvesti rezultatą rankiniu būdu.
         </p>
       </div>
@@ -3153,19 +3214,19 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
       {/* Setup veiksmai - visada matomi */}
       <div className="card-light rounded-xl p-4 space-y-3">
         <div>
-          <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-1">Rungtynių valdymas</div>
-          <p className="text-[11px] text-[#6b6359]">Tikros oficialios PFČ 2026 rungtynės - 72 grupių etapo rungtynės. Atkrintamųjų varžybų etapas pridedamas rankiniu būdu po grupių.</p>
+          <div className="font-display text-sm uppercase tracking-wider text-[#441514] mb-1">Rungtynių valdymas</div>
+          <p className="text-[11px] text-[#845641]">Tikros oficialios PFČ 2026 rungtynės - 72 grupių etapo rungtynės. Atkrintamųjų varžybų etapas pridedamas rankiniu būdu po grupių.</p>
         </div>
 
         <button onClick={handleSeedWC2026} disabled={seeding}
-          style={{ backgroundColor: '#0a2c4e', color: '#ffffff' }}
+          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
           className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Įkelti PFČ 2026 rungtynes (72)
         </button>
 
         <button onClick={handleSeedKnockout} disabled={seeding}
-          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
           className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Sukurti atkrintamųjų etapą (32)
@@ -3173,12 +3234,12 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSeed} disabled={seeding}
-            style={{ backgroundColor: '#6b6359', color: '#ffffff' }}
+            style={{ backgroundColor: '#845641', color: '#ffffff' }}
             className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
             Sukurti 8 testines
           </button>
           <button onClick={handleDeleteDemo} disabled={seeding}
-            style={{ backgroundColor: '#c8302e', color: '#ffffff' }}
+            style={{ backgroundColor: '#6A1107', color: '#ffffff' }}
             className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
             Ištrinti testines
           </button>
@@ -3187,8 +3248,8 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
 
       {matches.length === 0 && (
         <div className="card-light rounded-xl p-5">
-          <p className="text-sm text-[#1a1410] font-semibold">Nėra rungtynių</p>
-          <p className="text-xs text-[#6b6359] mt-1">Paspausk "Įkelti PFČ 2026 rungtynes" viršuje.</p>
+          <p className="text-sm text-[#441514] font-semibold">Nėra rungtynių</p>
+          <p className="text-xs text-[#845641] mt-1">Paspausk "Įkelti PFČ 2026 rungtynes" viršuje.</p>
         </div>
       )}
 
@@ -3199,34 +3260,34 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
               <div className="flex items-center gap-2 min-w-0">
                 <Flag code={teamsByCode[m.home]?.code} className="w-6 h-4" />
                 <span className="text-xs font-bold truncate">
-                  {teamsByCode[m.home]?.name || <span className="text-[#9d9489]">Paaiškės</span>}
+                  {teamsByCode[m.home]?.name || <span className="text-[#A88A6F]">Paaiškės</span>}
                 </span>
-                <span className="text-[#9d9489] text-xs">vs</span>
+                <span className="text-[#A88A6F] text-xs">vs</span>
                 <span className="text-xs font-bold truncate">
-                  {teamsByCode[m.away]?.name || <span className="text-[#9d9489]">Paaiškės</span>}
+                  {teamsByCode[m.away]?.name || <span className="text-[#A88A6F]">Paaiškės</span>}
                 </span>
                 <Flag code={teamsByCode[m.away]?.code} className="w-6 h-4" />
               </div>
               <StatusBadge status={m.status} />
             </div>
-            <div className="text-[10px] text-[#6b6359] mb-2 flex items-center gap-2">
+            <div className="text-[10px] text-[#845641] mb-2 flex items-center gap-2">
               <span>{formatKickoff(m.kickoff)}</span>
               {m.stage && m.stage !== 'group' && (
-                <span className="text-[9px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+                <span className="text-[9px] font-bold text-[#54130E] uppercase tracking-wider">
                   · {STAGE_LABELS[m.stage]}
                 </span>
               )}
             </div>
 
             {editingMatch === m.id ? (
-              <div className="space-y-2 pt-2 border-t border-[#1a1410]/8">
+              <div className="space-y-2 pt-2 border-t border-[#441514]/8">
                 {editForm.isKnockout && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[9px] font-bold text-[#6b6359] uppercase tracking-wider block mb-1">Šeimininkai</label>
+                      <label className="text-[9px] font-bold text-[#845641] uppercase tracking-wider block mb-1">Šeimininkai</label>
                       <select value={editForm.homeTeam}
                         onChange={(e) => setEditForm({ ...editForm, homeTeam: e.target.value })}
-                        className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white">
+                        className="w-full px-2 py-1.5 rounded border border-[#441514]/15 text-xs bg-white">
                         <option value="">— Paaiškės —</option>
                         {Object.keys(teamsByCode).sort((a, b) => teamsByCode[a].name.localeCompare(teamsByCode[b].name, 'lt')).map((code) => (
                           <option key={code} value={code}>{teamsByCode[code].name}</option>
@@ -3234,10 +3295,10 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
                       </select>
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-[#6b6359] uppercase tracking-wider block mb-1">Svečiai</label>
+                      <label className="text-[9px] font-bold text-[#845641] uppercase tracking-wider block mb-1">Svečiai</label>
                       <select value={editForm.awayTeam}
                         onChange={(e) => setEditForm({ ...editForm, awayTeam: e.target.value })}
-                        className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white">
+                        className="w-full px-2 py-1.5 rounded border border-[#441514]/15 text-xs bg-white">
                         <option value="">— Paaiškės —</option>
                         {Object.keys(teamsByCode).sort((a, b) => teamsByCode[a].name.localeCompare(teamsByCode[b].name, 'lt')).map((code) => (
                           <option key={code} value={code}>{teamsByCode[code].name}</option>
@@ -3249,39 +3310,39 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
                 <div className="flex items-center gap-2 justify-center">
                   <input type="number" min="0" max="20" value={editForm.home}
                     onChange={(e) => setEditForm({ ...editForm, home: e.target.value })}
-                    className="w-16 px-2 py-1.5 rounded border border-[#1a1410]/15 text-center font-mono" />
+                    className="w-16 px-2 py-1.5 rounded border border-[#441514]/15 text-center font-mono" />
                   <span>:</span>
                   <input type="number" min="0" max="20" value={editForm.away}
                     onChange={(e) => setEditForm({ ...editForm, away: e.target.value })}
-                    className="w-16 px-2 py-1.5 rounded border border-[#1a1410]/15 text-center font-mono" />
+                    className="w-16 px-2 py-1.5 rounded border border-[#441514]/15 text-center font-mono" />
                 </div>
                 <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                  className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-sm">
+                  className="w-full px-2 py-1.5 rounded border border-[#441514]/15 text-sm">
                   <option value="upcoming">Būsima</option>
                   <option value="live">Vyksta tiesiogiai</option>
                   <option value="finished">Baigta</option>
                 </select>
                 <div className="flex gap-2">
                   <button onClick={handleSaveEdit}
-                    style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+                    style={{ backgroundColor: '#54130E', color: '#ffffff' }}
                     className="flex-1 py-1.5 rounded text-xs font-bold uppercase tracking-wider">
                     Išsaugoti
                   </button>
                   <button onClick={() => setEditingMatch(null)}
-                    className="flex-1 py-1.5 rounded text-xs font-bold uppercase tracking-wider bg-white border border-[#1a1410]/15">
+                    className="flex-1 py-1.5 rounded text-xs font-bold uppercase tracking-wider bg-white border border-[#441514]/15">
                     Atšaukti
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between pt-2 border-t border-[#1a1410]/8">
+              <div className="flex items-center justify-between pt-2 border-t border-[#441514]/8">
                 {m.actualScore && (
                   <span className="font-mono text-sm font-bold">
                     Rez: {m.actualScore.home}:{m.actualScore.away}
                   </span>
                 )}
                 <button onClick={() => handleStartEdit(m)}
-                  className="ml-auto text-xs font-bold text-[#0a2c4e] uppercase tracking-wider">
+                  className="ml-auto text-xs font-bold text-[#54130E] uppercase tracking-wider">
                   Redaguoti →
                 </button>
               </div>
@@ -3290,8 +3351,8 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         ))}
       </div>
 
-      <div className="card-light rounded-xl p-4 bg-[#b8860b]/5 border-[#b8860b]/30">
-        <p className="text-xs text-[#1a1410]">
+      <div className="card-light rounded-xl p-4 bg-[#D1A974]/5 border-[#D1A974]/30">
+        <p className="text-xs text-[#441514]">
           <strong>Pastaba:</strong> Pakeitus rungtynių rezultatą į "Baigta", visų vartotojų taškai automatiškai perskaičiuojami pagal jų prognozes.
         </p>
       </div>
@@ -3450,7 +3511,7 @@ export default function App() {
   // Admin screen (modal-like full screen)
   if (screen === 'admin') {
     return (
-      <div className="app-bg font-body text-[#1a1410]">
+      <div className="app-bg font-body text-[#441514]">
         <Styles />
         <div className="max-w-md lg:max-w-4xl mx-auto min-h-screen px-4 pt-4">
           <AdminScreen
@@ -3479,15 +3540,15 @@ export default function App() {
   ];
 
   return (
-    <div className="app-bg font-body text-[#1a1410]">
+    <div className="app-bg font-body text-[#441514]">
       <Styles />
       <div className="max-w-md lg:max-w-5xl mx-auto min-h-screen flex flex-col">
         <header className="sticky top-0 z-40 glass-light px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <Emblem className="w-9 h-9" variant="light" />
             <div>
-              <div className="font-display text-sm text-[#1a1410] leading-none tracking-wide">PFČ 2026</div>
-              <div className="text-[9px] text-[#6b6359] uppercase tracking-widest mt-0.5">Totalizatorius</div>
+              <div className="font-display text-sm text-[#441514] leading-none tracking-wide">PFČ 2026</div>
+              <div className="text-[9px] text-[#845641] uppercase tracking-widest mt-0.5">Totalizatorius</div>
             </div>
           </div>
 
@@ -3500,8 +3561,8 @@ export default function App() {
                 <button key={item.id} onClick={() => setScreen(item.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                     active
-                      ? 'bg-[#0e6b47]/10 text-[#0e6b47]'
-                      : 'text-[#6b6359] hover:text-[#1a1410] hover:bg-[#1a1410]/5'
+                      ? 'bg-[#54130E]/10 text-[#54130E]'
+                      : 'text-[#845641] hover:text-[#441514] hover:bg-[#441514]/5'
                   }`}>
                   <Icon className="w-4 h-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">{item.label}</span>
@@ -3544,7 +3605,7 @@ export default function App() {
               return (
                 <button key={item.id} onClick={() => setScreen(item.id)}
                   className={`flex flex-col items-center gap-0.5 py-1.5 rounded-lg transition-colors ${
-                    active ? 'text-[#0e6b47]' : 'text-[#6b6359] hover:text-[#1a1410]'
+                    active ? 'text-[#54130E]' : 'text-[#845641] hover:text-[#441514]'
                   }`}>
                   <Icon className="w-4 h-4" />
                   <span className="text-[8px] font-bold uppercase tracking-wide leading-tight text-center">{item.label}</span>
