@@ -23,6 +23,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
 } from 'firebase/firestore';
 
 // === FIREBASE CONFIG ===
@@ -52,7 +53,7 @@ const AVATAR_COLORS = [
   '#2563eb', '#dd6b20', '#0891b2', '#7c3aed',
 ];
 
-export async function registerUser(email, password, username, fullName, companyId, companyName) {
+export async function registerUser(email, password, username, fullName, companyId, companyName, companyCode) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const uid = cred.user.uid;
 
@@ -64,22 +65,32 @@ export async function registerUser(email, password, username, fullName, companyI
 
     await updateProfile(cred.user, { displayName: username });
 
+    // PUBLIC dalis - matoma visiems prisijungusiems (reikalinga lyderlentei, ranking'ams)
     await setDoc(doc(db, 'users', uid), {
       uid,
-      email,
       username,
-      fullName,
       avatarLetter,
       avatarColor,
       companyId: companyId || null, // null = "Be įmonės"
       companyName: companyName || null,
+      companyCode: companyCode || null,
       isAdmin: false, // Admin teises galima suteikti tik per Firebase Console
+      createdAt: serverTimestamp(),
+    });
+
+    // PRIVATE dalis - email ir fullName matomi tik savininkui ir admin'ui
+    await setDoc(doc(db, 'users_private', uid), {
+      uid,
+      email,
+      fullName,
       createdAt: serverTimestamp(),
     });
 
     return cred.user;
   } catch (err) {
-    // Rollback: pašalinti dalinai sukurtą auth user'į
+    // Rollback: pašalinti dalinai sukurtą Firestore profilį + auth user'į
+    try { await deleteDoc(doc(db, 'users', uid)); } catch (_) {}
+    try { await deleteDoc(doc(db, 'users_private', uid)); } catch (_) {}
     try {
       await deleteUser(cred.user);
     } catch (_) {
@@ -104,8 +115,46 @@ export function onAuthChange(callback) {
 // === USER PROFILE ===
 
 export async function getUserProfile(uid) {
-  const snap = await getDoc(doc(db, 'users', uid));
-  return snap.exists() ? snap.data() : null;
+  const publicSnap = await getDoc(doc(db, 'users', uid));
+  if (!publicSnap.exists()) return null;
+  const publicData = publicSnap.data();
+
+  // Skaityti privatų doc'ą (email/fullName). Owner gali skaityti pagal Firestore Rules.
+  let privateData = {};
+  try {
+    const privateSnap = await getDoc(doc(db, 'users_private', uid));
+    if (privateSnap.exists()) {
+      privateData = privateSnap.data();
+    } else if (publicData.email || publicData.fullName) {
+      // Migracija: senos schemos vartotojas turi email/fullName public docs.
+      // Perkelti į private + ištrinti iš public. Vyksta vieną kartą per vartotoją.
+      const migrationData = {
+        uid,
+        email: publicData.email || null,
+        fullName: publicData.fullName || null,
+        migratedAt: serverTimestamp(),
+      };
+      try {
+        await setDoc(doc(db, 'users_private', uid), migrationData);
+        await updateDoc(doc(db, 'users', uid), {
+          email: deleteField(),
+          fullName: deleteField(),
+        });
+        privateData = { email: migrationData.email, fullName: migrationData.fullName };
+      } catch (migErr) {
+        // Migracija nepavyko - leisti login'tis, naudoti seną public data kaip fallback
+        console.warn('User private migration failed:', migErr);
+        privateData = {
+          email: publicData.email || null,
+          fullName: publicData.fullName || null,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to read users_private:', err);
+  }
+
+  return { ...publicData, ...privateData };
 }
 
 // === PREDICTIONS ===
@@ -201,6 +250,51 @@ export function listenToUsers(callback) {
   });
 }
 
+// Tik admin'ui - users_private kolekcija (email, fullName). Skaityti pagal Firestore Rules
+// leidžiama tik owner'iui arba admin'ui. Kiti vartotojai gaus permission-denied klaidą.
+export function listenToUsersPrivate(callback) {
+  return onSnapshot(collection(db, 'users_private'), (snap) => {
+    const map = {};
+    snap.forEach((d) => { map[d.id] = d.data(); });
+    callback(map);
+  }, (err) => {
+    // Klaida - turbūt ne admin. Tylim, callback gauna tuščią objektą.
+    console.warn('listenToUsersPrivate denied:', err.code);
+    callback({});
+  });
+}
+
+// Admin funkcija - migruoti VISŲ vartotojų email/fullName iš users į users_private.
+// Naudinga jei buvo daug senos schemos vartotojų prieš deploy'ą.
+// Naujieji vartotojai jau registruojami su nauja schema automatiškai.
+export async function migrateUsersToPrivateSchema() {
+  const usersSnap = await getDocs(collection(db, 'users'));
+  let migrated = 0;
+  const batch = writeBatch(db);
+
+  for (const userDoc of usersSnap.docs) {
+    const data = userDoc.data();
+    if (!data.email && !data.fullName) continue; // jau migruotas arba nebuvo PII
+
+    batch.set(doc(db, 'users_private', userDoc.id), {
+      uid: userDoc.id,
+      email: data.email || null,
+      fullName: data.fullName || null,
+      migratedAt: serverTimestamp(),
+    }, { merge: true });
+
+    batch.update(doc(db, 'users', userDoc.id), {
+      email: deleteField(),
+      fullName: deleteField(),
+    });
+
+    migrated++;
+  }
+
+  if (migrated > 0) await batch.commit();
+  return migrated;
+}
+
 export function listenToCompanies(callback) {
   return onSnapshot(collection(db, 'companies'), (snap) => {
     const companies = [];
@@ -228,27 +322,42 @@ export function updateMatch(matchId, updates) {
 
 // === COMPANIES (admin) ===
 
-export async function createCompany(name) {
-  const trimmed = (name || '').trim();
-  if (!trimmed) throw new Error('Įmonės pavadinimas negali būti tuščias');
+// Normalizuoti trumpinį - tik raidės/skaičiai didžiosiomis, max 6 simboliai
+function normalizeCompanyCode(code) {
+  if (!code) return null;
+  const cleaned = code.trim().toUpperCase().slice(0, 6);
+  return cleaned || null;
+}
+
+export async function createCompany(name, code) {
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) throw new Error('Įmonės pavadinimas negali būti tuščias');
   const ref = await addDoc(collection(db, 'companies'), {
-    name: trimmed,
+    name: trimmedName,
+    code: normalizeCompanyCode(code),
     createdAt: serverTimestamp(),
   });
   return ref.id;
 }
 
-export async function updateCompany(companyId, name) {
-  const trimmed = (name || '').trim();
-  if (!trimmed) throw new Error('Įmonės pavadinimas negali būti tuščias');
-  await updateDoc(doc(db, 'companies', companyId), { name: trimmed });
+export async function updateCompany(companyId, name, code) {
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) throw new Error('Įmonės pavadinimas negali būti tuščias');
+  const normalizedCode = normalizeCompanyCode(code);
+  await updateDoc(doc(db, 'companies', companyId), {
+    name: trimmedName,
+    code: normalizedCode,
+  });
 
-  // Sinchronizuoti companyName visiems šios įmonės vartotojams
+  // Sinchronizuoti companyName + companyCode visiems šios įmonės vartotojams
   const q = query(collection(db, 'users'), where('companyId', '==', companyId));
   const snap = await getDocs(q);
   if (!snap.empty) {
     const batch = writeBatch(db);
-    snap.forEach((u) => batch.update(doc(db, 'users', u.id), { companyName: trimmed }));
+    snap.forEach((u) => batch.update(doc(db, 'users', u.id), {
+      companyName: trimmedName,
+      companyCode: normalizedCode,
+    }));
     await batch.commit();
   }
 }
@@ -270,10 +379,11 @@ export function setUserAdmin(uid, isAdmin) {
 }
 
 // Pakeisti vartotojo įmonę (perskirti į kitą arba pašalinti)
-export function setUserCompany(uid, companyId, companyName) {
+export function setUserCompany(uid, companyId, companyName, companyCode) {
   return updateDoc(doc(db, 'users', uid), {
     companyId: companyId || null,
     companyName: companyName || null,
+    companyCode: companyCode || null,
   });
 }
 
@@ -656,6 +766,10 @@ export async function syncResultsFromAPI() {
 
   const batch = writeBatch(db);
 
+  // Set'as, į kurį dedame jau "paimtus" placeholder ID'us per šitą sync iteraciją,
+  // kad du API match'ai su tuo pačiu kickoff laiku negautų to paties k slot'o
+  const claimedPlaceholderIds = new Set();
+
   for (const apiMatch of apiMatches) {
     const homeCode = findTeamCode(apiMatch.homeTeam);
     const awayCode = findTeamCode(apiMatch.awayTeam);
@@ -666,19 +780,42 @@ export async function syncResultsFromAPI() {
       continue;
     }
 
-    // Surasti mūsų match - pagal komandas + arti pagal datą (±24h)
+    // 1) Pirmas bandymas: rasti mūsų match pagal tikslias komandas + kickoff ±24h.
+    // Tai veikia kai komandos jau priskirtos (grupių etapas arba pakartotinis sync).
     const apiTime = new Date(apiMatch.utcDate).getTime();
-    const ourMatch = ourMatches.find((m) => {
+    let ourMatch = ourMatches.find((m) => {
       if (m.home !== homeCode || m.away !== awayCode) return false;
       const ourTime = new Date(m.kickoff).getTime();
       return Math.abs(apiTime - ourTime) < 24 * 3600000;
     });
 
-    // Jei mūsų DB nėra šio match'o - patikrinti, ar tai knockout etapas su žinomomis komandomis
+    // Sekti ar tai placeholder, kurį dabar užpildome komandomis - tada UPDATE turi pridėti home/away
+    let fillingPlaceholder = false;
+
+    // 2) Antras bandymas (tik knockout): rasti TUŠČIĄ placeholder k01-k32 su tuo pačiu
+    // stage ir kickoff ±24h. Tai užkerta dublikatų atsiradimą per pirmą knockout sync.
+    if (!ourMatch) {
+      const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
+      if (internalStage && internalStage !== 'group') {
+        ourMatch = ourMatches.find((m) => {
+          if (m.stage !== internalStage) return false;
+          if (m.home !== null || m.away !== null) return false; // jau užpildytas
+          if (claimedPlaceholderIds.has(m.id)) return false; // jau paimtas šitoje iteracijoje
+          const ourTime = new Date(m.kickoff).getTime();
+          return Math.abs(apiTime - ourTime) < 24 * 3600000;
+        });
+        if (ourMatch) {
+          claimedPlaceholderIds.add(ourMatch.id);
+          fillingPlaceholder = true;
+        }
+      }
+    }
+
+    // 3) Jei niekas neradom - kaip atsarginis variantas sukurti naują wcXXXX (knockout)
+    // arba pranešti apie nepriderintą (grupių etapas - admin'as neseedino)
     if (!ourMatch) {
       const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
 
-      // Auto-create knockout etapo match'as (grupių jau seedinti rankiniu būdu g01-g72)
       if (internalStage && internalStage !== 'group') {
         const newId = `wc${apiMatch.id}`;
         const newStatus = mapApiStatus(apiMatch.status);
@@ -733,7 +870,20 @@ export async function syncResultsFromAPI() {
       }
     }
 
-    // Ar reikia kažką keisti?
+    // Jei pildomas placeholder - VISADA reikia update'inti (bent komandos pasikeitė)
+    if (fillingPlaceholder) {
+      const ref = doc(db, 'matches', ourMatch.id);
+      batch.update(ref, {
+        home: homeCode,
+        away: awayCode,
+        status: newStatus,
+        actualScore: newScore,
+      });
+      stats.updated++;
+      continue;
+    }
+
+    // Įprastinis update - ar reikia kažką keisti?
     const statusChanged = newStatus !== ourMatch.status;
     const scoreChanged = JSON.stringify(newScore) !== JSON.stringify(ourMatch.actualScore);
 

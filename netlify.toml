@@ -20,3 +20,8 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # Content Security Policy - apsauga nuo XSS ir kitų injekcijų
+    # 'unsafe-inline' style'ams būtinas dėl React style={{...}} atributų ir <style> bloko
+    # connect-src - visi Firebase ir Firestore endpoint'ai
+    # img-src - flagcdn.com (32 PFČ 2026 vėliavos) ir data: URI (inline SVG)
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://flagcdn.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebaseapp.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebase.googleapis.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';"

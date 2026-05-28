@@ -3,12 +3,13 @@ import {
   Trophy, Home, Calendar, BarChart3, Lock, Settings,
   Award, Crown, Target, Star, Flame, Plus, Minus, Shield,
   ChevronRight, ChevronLeft, Radio, LogOut, Loader2,
-  AlertCircle, CheckCircle2,
+  AlertCircle, CheckCircle2, BookOpen, Info,
 } from 'lucide-react';
 import {
   registerUser, loginUser, logoutUser, onAuthChange,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
+  listenToUsersPrivate, migrateUsersToPrivateSchema,
   listenToAllTournamentBets, listenToTournamentResults, saveTournamentResults,
   updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches, syncResultsFromAPI,
   createCompany, updateCompany, deleteCompany, setUserAdmin, setUserCompany,
@@ -172,6 +173,13 @@ const calculateTournamentPoints = (bet, results) => {
   });
   pts.total = pts.champion + pts.bestPlayer + pts.topScorer + pts.bestGoalkeeper + pts.bestYoungPlayer;
   return pts;
+};
+
+// Trumpinys ikonai - pirmenybė įmonės oficialus code, fallback į pirmą pavadinimo raidę
+const companyAbbreviation = (company) => {
+  if (!company) return '?';
+  if (company.code) return company.code;
+  return (company.name || '?')[0].toUpperCase();
 };
 
 // LT linksniavimas pagal skaičių: 1 dalyvis, 2-9 dalyviai, 10-19 dalyvių,
@@ -832,14 +840,16 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
       // companyChoice: "none" = Be įmonės, kitaip = company.id
       let companyId = null;
       let companyName = null;
+      let companyCode = null;
       if (form.companyChoice !== 'none') {
         const company = companies.find((c) => c.id === form.companyChoice);
         if (company) {
           companyId = company.id;
           companyName = company.name;
+          companyCode = company.code || null;
         }
       }
-      await registerUser(form.email, form.password, form.username, form.fullName, companyId, companyName);
+      await registerUser(form.email, form.password, form.username, form.fullName, companyId, companyName, companyCode);
       // onAuthChange auto-pakeis ekraną
     } catch (err) {
       setError(translateAuthError(err.code) || err.message);
@@ -885,7 +895,9 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
                 disabled={loading}>
                 <option value="" disabled>-- Pasirinkti įmonę --</option>
                 {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.code ? `${c.code} — ${c.name}` : c.name}
+                  </option>
                 ))}
                 <option value="none">Be įmonės</option>
               </select>
@@ -1338,6 +1350,7 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         stats[u.companyId] = {
           companyId: u.companyId,
           companyName: u.companyName || 'Nežinoma įmonė',
+          companyCode: u.companyCode || null,
           members: [],
           totalPoints: 0,
         };
@@ -1510,12 +1523,16 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
             <div className="card-light rounded-xl overflow-hidden">
               {companyStats.map((c, i) => {
                 const isMyCompany = c.companyId === userProfile.companyId;
+                const abbrev = companyAbbreviation({ name: c.companyName, code: c.companyCode });
+                const iconClass = abbrev.length > 2
+                  ? 'w-auto min-w-[40px] px-1.5 h-9 text-xs'
+                  : 'w-9 h-9 text-sm';
                 return (
                   <div key={c.companyId}
                     className={`flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0 ${isMyCompany ? 'bg-[#0e6b47]/5' : ''}`}>
                     <div className="font-display text-sm w-6 text-center text-[#6b6359]">{i + 1}</div>
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display text-sm bg-[#0a2c4e]/10 text-[#0a2c4e]">
-                      {(c.companyName || '?')[0].toUpperCase()}
+                    <div className={`${iconClass} rounded-lg flex items-center justify-center font-display font-mono tracking-tight bg-[#0a2c4e]/10 text-[#0a2c4e] flex-shrink-0`}>
+                      {abbrev}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm font-semibold truncate ${isMyCompany ? 'text-[#0e6b47]' : 'text-[#1a1410]'}`}>
@@ -1578,6 +1595,9 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
         <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0a2c4e]/8 border border-[#0a2c4e]/20">
           <Trophy className="w-3 h-3 text-[#0a2c4e]" />
           <span className="text-[10px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+            {userProfile.companyCode && (
+              <span className="font-mono mr-1">{userProfile.companyCode}</span>
+            )}
             {userProfile.companyName || 'Be įmonės'}
           </span>
         </div>
@@ -1677,6 +1697,271 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
         className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-colors text-sm flex items-center justify-center gap-2 hover:bg-[#c8302e]/5">
         <LogOut className="w-4 h-4" /> Atsijungti
       </button>
+    </div>
+  );
+};
+
+// === RULES SCREEN (taisyklės ir taškų skaičiavimo logika) ===
+
+const RuleSection = ({ icon: Icon, title, color = '#0a2c4e', children }) => (
+  <div className="card-light rounded-2xl p-5">
+    <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1a1410]/8">
+      <Icon className="w-5 h-5" style={{ color }} />
+      <h3 className="font-display text-base uppercase tracking-wider text-[#1a1410]">{title}</h3>
+    </div>
+    {children}
+  </div>
+);
+
+const PointsRow = ({ label, points, color, example }) => (
+  <div className="flex items-start gap-3 py-2 border-b border-[#1a1410]/5 last:border-0">
+    <div className="flex-shrink-0 w-14 text-center">
+      <div className="font-display text-xl" style={{ color }}>+{points}</div>
+      <div className="text-[9px] text-[#6b6359] uppercase tracking-wider">tšk.</div>
+    </div>
+    <div className="flex-1 min-w-0">
+      <div className="text-sm font-semibold text-[#1a1410]">{label}</div>
+      {example && <div className="text-[11px] text-[#6b6359] mt-0.5">{example}</div>}
+    </div>
+  </div>
+);
+
+const RulesScreen = () => {
+  return (
+    <div className="space-y-4 pb-24 lg:pb-8">
+      <div>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">TAISYKLĖS</h1>
+        <p className="text-sm text-[#6b6359]">Kaip žaisti, kaip skaičiuojami taškai, kaip rikiuojama lyderlentė</p>
+      </div>
+
+      {/* Apžvalga */}
+      <RuleSection icon={Info} title="Apžvalga" color="#0a2c4e">
+        <p className="text-sm text-[#1a1410] leading-relaxed">
+          PFČ 2026 Totalizatorius — vidinis pulas pasaulio futbolo čempionato 2026 metų laidos prognozavimui.
+          Spėk kiekvienos rungtynių rezultatą bei turnyro pabaigos statistiką (čempionas, geriausi žaidėjai)
+          ir rinkis taškus. Lyderis paaiškės po finalo.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
+            <div className="text-[#6b6359] uppercase tracking-wider text-[9px]">Turnyras</div>
+            <div className="font-bold text-[#1a1410]">2026-06-11 — 2026-07-19</div>
+          </div>
+          <div className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
+            <div className="text-[#6b6359] uppercase tracking-wider text-[9px]">Iš viso rungtynių</div>
+            <div className="font-bold text-[#1a1410]">72 grupių + 32 knockout</div>
+          </div>
+        </div>
+      </RuleSection>
+
+      {/* Kaip dalyvauti */}
+      <RuleSection icon={CheckCircle2} title="Kaip dalyvauti" color="#0e6b47">
+        <ol className="space-y-2 text-sm text-[#1a1410]">
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">1.</span>Užsiregistruok, pasirink savo įmonę (arba „Be įmonės")</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">2.</span>Iki turnyro pradžios suvesk turnyro prognozes (čempionas + 4 žaidėjų kategorijos)</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">3.</span>Prieš kiekvienas rungtynes spėk rezultatą</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">4.</span>Po kiekvienos rungtynės taškai pridedami automatiškai</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">5.</span>Sek savo poziciją Lyderiai skiltyje</li>
+        </ol>
+      </RuleSection>
+
+      {/* Rungtynių prognozės - taškai */}
+      <RuleSection icon={Target} title="Rungtynių prognozės" color="#0e6b47">
+        <p className="text-xs text-[#6b6359] mb-3">
+          Už kiekvieną pasibaigusią rungtynę gauni taškus pagal tai, kaip arti tikro rezultato atspėjai.
+        </p>
+        <div>
+          <PointsRow
+            label="Tikslus rezultatas"
+            points={5}
+            color="#0e6b47"
+            example="Tikras 2:1 · spėjai 2:1 → +5 tšk." />
+          <PointsRow
+            label="Teisingas gol skirtumas"
+            points={3}
+            color="#b8860b"
+            example="Tikras 2:1 · spėjai 3:2 (abu skirtumas +1) → +3 tšk." />
+          <PointsRow
+            label="Tik teisinga baigtis (laimėtojas / lygiosios)"
+            points={2}
+            color="#0a2c4e"
+            example="Tikras 2:1 · spėjai 4:1 (abu laimi šeimininkai) → +2 tšk." />
+          <PointsRow
+            label="Pro šalį"
+            points={0}
+            color="#9d9489"
+            example="Tikras 2:1 · spėjai 1:2 (kita baigtis) → 0 tšk." />
+        </div>
+        <div className="mt-3 rounded-lg bg-[#0e6b47]/5 border border-[#0e6b47]/15 p-3">
+          <p className="text-xs text-[#1a1410]">
+            <strong>Pastaba:</strong> jei nespėjai pažymėti prognozės iki rungtynių pradžios — gauni 0 tšk., bet tai nesutrukdo „serijos" skaičiuoti nuo kito match'o.
+          </p>
+        </div>
+      </RuleSection>
+
+      {/* Turnyro prognozės - taškai */}
+      <RuleSection icon={Crown} title="Turnyro prognozės" color="#b8860b">
+        <p className="text-xs text-[#6b6359] mb-3">
+          Vienkartiniai spėjimai prieš turnyro pradžią. Po pradžios <strong>nebegalima keisti</strong>.
+        </p>
+        <div>
+          <PointsRow
+            label="Čempionas"
+            points={25}
+            color="#b8860b"
+            example="Spėk komandą, kuri laimės finalą" />
+          <PointsRow
+            label="Geriausias turnyro žaidėjas"
+            points={15}
+            color="#b8860b"
+            example="FIFA Golden Ball laimėtojas" />
+          <PointsRow
+            label="Daugiausiai įvarčių įmušęs žaidėjas"
+            points={15}
+            color="#0e6b47"
+            example="FIFA Golden Boot laimėtojas" />
+          <PointsRow
+            label="Geriausias vartininkas"
+            points={15}
+            color="#0a2c4e"
+            example="FIFA Golden Glove laimėtojas" />
+          <PointsRow
+            label="Geriausias 21m. ar jaunesnis žaidėjas"
+            points={15}
+            color="#c8302e"
+            example="FIFA Young Player Award laimėtojas" />
+        </div>
+        <div className="mt-3 rounded-lg bg-[#b8860b]/5 border border-[#b8860b]/15 p-3">
+          <p className="text-xs text-[#1a1410]">
+            <strong>Maksimum iš turnyro prognozių:</strong> 25 + 4×15 = <span className="font-mono font-bold">85 tšk.</span>
+          </p>
+          <p className="text-[11px] text-[#6b6359] mt-1">
+            Žaidėjų vardai lyginami case-insensitive ir ignoruoja tarpus (pvz., „MESSI", „messi", „Lionel Messi" — bus laikomi tuo pačiu, jei admin įvedė atitinkamai).
+          </p>
+        </div>
+      </RuleSection>
+
+      {/* Terminai */}
+      <RuleSection icon={Lock} title="Spėjimų terminai" color="#c8302e">
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-bold text-[#1a1410] mb-1">Rungtynių prognozės</div>
+            <p className="text-xs text-[#6b6359] leading-relaxed">
+              Galima keisti iki tos rungtynės pradžios laiko (kickoff). Vos rungtynė prasideda — prognozė užšaldoma. Tai patikrinama serveryje (Firestore Rules), tad apeiti nepavyks.
+            </p>
+          </div>
+          <div>
+            <div className="text-sm font-bold text-[#1a1410] mb-1">Turnyro prognozės</div>
+            <p className="text-xs text-[#6b6359] leading-relaxed">
+              Galima keisti iki <span className="font-mono font-bold text-[#1a1410]">2026-06-11 03:00 LT</span> (turnyro pradžios). Po šio momento — užšaldoma ir nebegalima keisti, net per API. Reikia spėti iki pirmos rungtynės dieną.
+            </p>
+          </div>
+        </div>
+      </RuleSection>
+
+      {/* Serija (streak) */}
+      <RuleSection icon={Flame} title="Serija (streak)" color="#f5d27a">
+        <p className="text-sm text-[#1a1410] leading-relaxed">
+          Serija — kelias iš eilės atspėtas rungtynes (bent 2 taškai už kiekvieną). Skaičiuojama atgal nuo paskutinės pasibaigusios rungtynės. Pirma 0 tšk. prognozė nutraukia seriją.
+        </p>
+        <div className="mt-3 text-[11px] text-[#6b6359]">
+          <strong>Pavyzdys:</strong> jei trys paskutinės rungtynės davė tau 3, 2, 5 tšk., o ketvirtos atgal — 0 tšk., tavo serija = <span className="font-mono font-bold text-[#f5d27a]">3</span>.
+        </div>
+      </RuleSection>
+
+      {/* Lyderlentė */}
+      <RuleSection icon={BarChart3} title="Lyderlentė" color="#0a2c4e">
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-bold text-[#1a1410] mb-1">Bendra — pagal individualius taškus</div>
+            <p className="text-xs text-[#6b6359]">
+              Bendros sumos rikiuojamos mažėjančia tvarka. Iš viso = rungtynių taškai + turnyro prognozių taškai.
+            </p>
+          </div>
+          <div>
+            <div className="text-sm font-bold text-[#1a1410] mb-1">Įmonės — pagal vidurkį vienam dalyviui</div>
+            <p className="text-xs text-[#6b6359]">
+              Sumuojami visi įmonės dalyvių taškai ir dalinami iš dalyvių skaičiaus. Taip mažos įmonės sąžiningai konkuruoja su didelėmis — kolektyvinis dydis nesuteikia pranašumo.
+            </p>
+          </div>
+        </div>
+      </RuleSection>
+
+      {/* Grupių etapas */}
+      <RuleSection icon={Shield} title="Grupių etapas" color="#0e6b47">
+        <p className="text-sm text-[#1a1410] leading-relaxed mb-3">
+          12 grupių (A–L) po 4 komandas, kiekviena žaidžia su kitomis (3 rungtynės per komandą = 72 grupių rungtynės).
+        </p>
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-3 rounded-full bg-[#0e6b47]" />
+            <span className="text-[#1a1410]"><strong>1-2 vieta</strong> — tiesiogiai į knockout etapą (1/16 finalo)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-3 rounded-full bg-[#b8860b]" />
+            <span className="text-[#1a1410]"><strong>3 vieta</strong> — 8 geriausi (iš 12) taip pat patenka į knockout</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-3 rounded-full bg-[#9d9489]" />
+            <span className="text-[#1a1410]"><strong>4 vieta</strong> — eliminuotos</span>
+          </div>
+        </div>
+        <div className="mt-3 rounded-lg bg-[#0e6b47]/5 border border-[#0e6b47]/15 p-3">
+          <div className="text-[11px] font-bold text-[#1a1410] uppercase tracking-wider mb-1">Rūšiavimo tvarka (tiebreakers)</div>
+          <ol className="text-[11px] text-[#6b6359] space-y-0.5 ml-4 list-decimal">
+            <li>Taškai (3 už pergalę, 1 už lygiąsias)</li>
+            <li>Gol skirtumas (įmušti − praleisti)</li>
+            <li>Įmušti įvarčiai</li>
+          </ol>
+          <p className="text-[10px] text-[#6b6359] mt-2 italic">
+            Pastaba: FIFA naudoja papildomus kriterijus (tarpusavio rungtynės, fair-play taškai, burtai), bet retais atvejais — mūsų app'as parodo paprastesnę versiją.
+          </p>
+        </div>
+      </RuleSection>
+
+      {/* Knockout etapas */}
+      <RuleSection icon={Award} title="Knockout etapas" color="#0a2c4e">
+        <p className="text-sm text-[#1a1410] leading-relaxed mb-3">
+          32 komandos atkrenta vienos su kitomis. Lygiosios reglamentinio laiko gale → pratęsimas → baudinukų serija.
+        </p>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {[
+            { stage: '1/16 finalas', matches: 16, dates: '2026-06-28 → 07-03' },
+            { stage: 'Aštuntfinalis', matches: 8, dates: '2026-07-04 → 07-07' },
+            { stage: 'Ketvirtfinalis', matches: 4, dates: '2026-07-09 → 07-11' },
+            { stage: 'Pusfinalis', matches: 2, dates: '2026-07-14 → 07-15' },
+            { stage: 'Dėl 3 vietos', matches: 1, dates: '2026-07-18' },
+            { stage: 'Finalas', matches: 1, dates: '2026-07-19' },
+          ].map((s) => (
+            <div key={s.stage} className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
+              <div className="font-bold text-[#1a1410]">{s.stage}</div>
+              <div className="text-[10px] text-[#6b6359]">{s.matches} {pluralizeLt(s.matches, ['rungtynė', 'rungtynės', 'rungtynių'])}</div>
+              <div className="text-[10px] text-[#6b6359]">{s.dates}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-[#6b6359] mt-3">
+          Spėjimai veikia ta pati logika kaip ir grupių etape (5/3/2 tšk.). Po baudinukų serijos rezultatas užfiksuojamas pagal reglamentinį laiką (paprastai 1:1, 2:2 ir t.t.), nebent FIFA reglamentas keičia interpretaciją.
+        </p>
+      </RuleSection>
+
+      {/* Saugumas */}
+      <RuleSection icon={Lock} title="Saugumas ir privatumas" color="#6b6359">
+        <ul className="space-y-2 text-xs text-[#1a1410]">
+          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Slaptažodžiai saugomi Firebase Authentication (bcrypt hash)</li>
+          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Visi duomenys siunčiami per HTTPS</li>
+          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Negali matyti svetimų prognozių iki rungtynių pradžios</li>
+          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Negali keisti svetimų prognozių, taškų ar profilio</li>
+          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Admin teises gali suteikti tik kitas admin'as (per app) arba Firebase Console</li>
+          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Server-side patikrinimai užkerta visus apeiti per API call'ą</li>
+        </ul>
+      </RuleSection>
+
+      {/* Kontaktas / klausimai */}
+      <RuleSection icon={AlertCircle} title="Klausimai?" color="#b8860b">
+        <p className="text-sm text-[#1a1410] leading-relaxed">
+          Jei radai bug'ą, kažko trūksta arba reikia daugiau funkcijų — susisiek su admin'u. Šis pulas vidinis, todėl visi atnaujinimai daromi pagal dalyvių pasiūlymus.
+        </p>
+      </RuleSection>
     </div>
   );
 };
@@ -2135,8 +2420,10 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
 const AdminCompaniesPanel = ({ companies, users }) => {
   const { confirm, notify, dialog } = useDialog();
   const [newName, setNewName] = useState('');
+  const [newCode, setNewCode] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
   const [busy, setBusy] = useState(false);
 
   // Skaičiuoti dalyvius kiekvienai įmonei
@@ -2152,8 +2439,9 @@ const AdminCompaniesPanel = ({ companies, users }) => {
     if (!newName.trim()) return;
     setBusy(true);
     try {
-      await createCompany(newName);
+      await createCompany(newName, newCode);
       setNewName('');
+      setNewCode('');
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
@@ -2165,9 +2453,10 @@ const AdminCompaniesPanel = ({ companies, users }) => {
     if (!editName.trim()) return;
     setBusy(true);
     try {
-      await updateCompany(editingId, editName);
+      await updateCompany(editingId, editName, editCode);
       setEditingId(null);
       setEditName('');
+      setEditCode('');
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
@@ -2207,24 +2496,36 @@ const AdminCompaniesPanel = ({ companies, users }) => {
       {/* Pridėti naują */}
       <div className="card-light rounded-xl p-4">
         <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-3">Nauja įmonė</div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="Pavadinimas, pvz., VMG"
+            placeholder="Pilnas pavadinimas, pvz., Vakarų Medienos Grupė"
             disabled={busy}
             className="flex-1 px-3 py-2 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-sm focus:outline-none focus:border-[#0e6b47]/50 disabled:opacity-50" />
+          <input
+            type="text"
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value.toUpperCase().slice(0, 6))}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="Trumpinys (VMG)"
+            disabled={busy}
+            maxLength={6}
+            className="sm:w-32 px-3 py-2 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-sm font-mono uppercase focus:outline-none focus:border-[#0e6b47]/50 disabled:opacity-50" />
           <button
             onClick={handleCreate}
             disabled={busy || !newName.trim()}
             style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
-            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center gap-1">
+            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             <Plus className="w-3.5 h-3.5" /> Pridėti
           </button>
         </div>
+        <p className="text-[10px] text-[#6b6359] mt-2">
+          Trumpinys (max 6 simbolių, automatiškai didžiosiomis) rodomas ikonose. Jei nepateiksi - bus naudojama pirma pavadinimo raidė.
+        </p>
       </div>
 
       {/* Sąrašas */}
@@ -2237,24 +2538,43 @@ const AdminCompaniesPanel = ({ companies, users }) => {
           {companies.map((c) => {
             const count = userCounts[c.id] || 0;
             const isEditing = editingId === c.id;
+            const abbrev = companyAbbreviation(c);
+            // Ikona platesnė jei trumpinys >2 simbolių (kad tilptų)
+            const iconClass = abbrev.length > 2
+              ? 'w-auto min-w-[44px] px-2 h-9 text-xs'
+              : 'w-9 h-9 text-sm';
             return (
               <div key={c.id} className="flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display text-sm bg-[#0a2c4e]/10 text-[#0a2c4e] flex-shrink-0">
-                  {(c.name || '?')[0].toUpperCase()}
+                <div className={`${iconClass} rounded-lg flex items-center justify-center font-display bg-[#0a2c4e]/10 text-[#0a2c4e] flex-shrink-0 font-mono tracking-tight`}>
+                  {abbrev}
                 </div>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                    autoFocus
-                    disabled={busy}
-                    className="flex-1 px-3 py-1.5 rounded border border-[#0e6b47]/40 text-sm focus:outline-none focus:border-[#0e6b47]" />
+                  <div className="flex-1 flex flex-col sm:flex-row gap-2 min-w-0">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                      autoFocus
+                      disabled={busy}
+                      placeholder="Pavadinimas"
+                      className="flex-1 px-3 py-1.5 rounded border border-[#0e6b47]/40 text-sm focus:outline-none focus:border-[#0e6b47]" />
+                    <input
+                      type="text"
+                      value={editCode}
+                      onChange={(e) => setEditCode(e.target.value.toUpperCase().slice(0, 6))}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                      disabled={busy}
+                      maxLength={6}
+                      placeholder="Trumpinys"
+                      className="sm:w-28 px-3 py-1.5 rounded border border-[#0e6b47]/40 text-sm font-mono uppercase focus:outline-none focus:border-[#0e6b47]" />
+                  </div>
                 ) : (
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-[#1a1410] truncate">{c.name}</div>
                     <div className="text-[10px] text-[#6b6359]">
+                      {c.code ? <span className="font-mono text-[#0a2c4e]">{c.code}</span> : <span className="opacity-60 italic">be trumpinio</span>}
+                      {' · '}
                       {count} {pluralizeLt(count, ['dalyvis', 'dalyviai', 'dalyvių'])}
                     </div>
                   </div>
@@ -2266,14 +2586,14 @@ const AdminCompaniesPanel = ({ companies, users }) => {
                       className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50">
                       Saugoti
                     </button>
-                    <button onClick={() => { setEditingId(null); setEditName(''); }}
+                    <button onClick={() => { setEditingId(null); setEditName(''); setEditCode(''); }}
                       className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white border border-[#1a1410]/15">
                       Atš.
                     </button>
                   </div>
                 ) : (
                   <div className="flex gap-1 flex-shrink-0">
-                    <button onClick={() => { setEditingId(c.id); setEditName(c.name); }}
+                    <button onClick={() => { setEditingId(c.id); setEditName(c.name); setEditCode(c.code || ''); }}
                       className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#0a2c4e] hover:bg-[#0a2c4e]/5">
                       Keisti
                     </button>
@@ -2300,10 +2620,23 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
   const { confirm, notify, dialog } = useDialog();
   const [busyUid, setBusyUid] = useState(null);
   const [search, setSearch] = useState('');
+  const [privateMap, setPrivateMap] = useState({});
+  const [migrating, setMigrating] = useState(false);
+
+  // Listen to users_private (admin'as turi access pagal Firestore Rules)
+  useEffect(() => {
+    return listenToUsersPrivate(setPrivateMap);
+  }, []);
+
+  // Sujungti public + private vartotojų duomenis
+  const usersWithPrivate = useMemo(() =>
+    users.map((u) => ({ ...u, ...(privateMap[u.uid] || {}) })),
+    [users, privateMap]
+  );
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...users].sort((a, b) => (a.username || '').localeCompare(b.username || '', 'lt'));
+    const sorted = [...usersWithPrivate].sort((a, b) => (a.username || '').localeCompare(b.username || '', 'lt'));
     if (!q) return sorted;
     return sorted.filter(
       (u) =>
@@ -2311,7 +2644,31 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
         (u.fullName || '').toLowerCase().includes(q) ||
         (u.email || '').toLowerCase().includes(q)
     );
-  }, [users, search]);
+  }, [usersWithPrivate, search]);
+
+  // Skaičiuoti, kiek vartotojų vis dar turi senos schemos duomenis (email/fullName public dok'e)
+  const usersNeedingMigration = useMemo(
+    () => users.filter((u) => u.email || u.fullName).length,
+    [users]
+  );
+
+  const handleMigrate = async () => {
+    const ok = await confirm({
+      title: 'Migruoti vartotojų privatumus',
+      message: `Bus perkelti ${usersNeedingMigration} vartotojų email ir fullName iš public dokumentų į privačius (users_private). Po šito jų email matys tik patys vartotojai ir admin'ai. Veiksmas negrįžtamas.`,
+      confirmLabel: 'Migruoti',
+    });
+    if (!ok) return;
+    setMigrating(true);
+    try {
+      const count = await migrateUsersToPrivateSchema();
+      await notify({ title: 'Pavyko', message: `Migruota ${count} vartotojų. Privatūs duomenys dabar slepiami nuo kitų.` });
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setMigrating(false);
+    }
+  };
 
   const handleToggleAdmin = async (user) => {
     const willBeAdmin = !user.isAdmin;
@@ -2338,10 +2695,10 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
     setBusyUid(user.uid);
     try {
       if (!companyId) {
-        await setUserCompany(user.uid, null, null);
+        await setUserCompany(user.uid, null, null, null);
       } else {
         const company = companies.find((c) => c.id === companyId);
-        await setUserCompany(user.uid, companyId, company?.name || null);
+        await setUserCompany(user.uid, companyId, company?.name || null, company?.code || null);
       }
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
@@ -2352,6 +2709,28 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
 
   return (
     <div className="space-y-3">
+      {/* Privatumo migracija - tik jei yra senos schemos vartotojų */}
+      {usersNeedingMigration > 0 && (
+        <div className="card-light rounded-xl p-4 bg-[#b8860b]/5 border-[#b8860b]/30">
+          <div className="flex items-start gap-2 mb-3">
+            <AlertCircle className="w-4 h-4 text-[#b8860b] flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-[#1a1410]">
+              <div className="font-bold mb-1">{usersNeedingMigration} vartotojų turi senos schemos PII duomenis</div>
+              <p className="text-[11px] text-[#6b6359]">
+                Jų email ir vardas pavardė yra public dokumentuose ir gali būti matomi kitiems prisijungusiems
+                vartotojams per DevTools. Paspausk mygtuką žemiau, kad perkeltum juos į privačius dokumentus.
+              </p>
+            </div>
+          </div>
+          <button onClick={handleMigrate} disabled={migrating}
+            style={{ backgroundColor: '#b8860b', color: '#ffffff' }}
+            className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2">
+            {migrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Migruoti privatumo duomenis ({usersNeedingMigration})
+          </button>
+        </div>
+      )}
+
       <input
         type="text"
         value={search}
@@ -2396,7 +2775,9 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
                     className="flex-1 px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white disabled:opacity-50">
                     <option value="">Be įmonės</option>
                     {companies.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.code ? `${c.code} — ${c.name}` : c.name}
+                      </option>
                     ))}
                   </select>
                   <button
@@ -3098,6 +3479,7 @@ export default function App() {
     { id: 'bracket', icon: Award, label: 'Bracket' },
     { id: 'tournament', icon: Trophy, label: 'Prognozės' },
     { id: 'leaderboard', icon: BarChart3, label: 'Lyderiai' },
+    { id: 'rules', icon: BookOpen, label: 'Taisyklės' },
   ];
 
   return (
@@ -3147,6 +3529,7 @@ export default function App() {
           {screen === 'groups' && <GroupsScreen matches={matches} />}
           {screen === 'bracket' && <BracketScreen matches={matches} predictions={predictions}
             onUpdatePrediction={handleUpdatePrediction} />}
+          {screen === 'rules' && <RulesScreen />}
           {screen === 'tournament' && <TournamentScreen userProfile={userProfile} matches={matches}
             tournamentBet={tournamentBet} setTournamentBet={setTournamentBet} />}
           {screen === 'leaderboard' && <LeaderboardScreen usersWithPoints={usersWithPoints}
@@ -3157,18 +3540,18 @@ export default function App() {
         </main>
 
         {/* Mobile bottom nav - desktop'e paslėpta (header'io tabs naudojami) */}
-        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-light px-2 py-2 z-30 lg:hidden">
-          <div className="grid grid-cols-6 gap-1">
+        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-light px-1 py-2 z-30 lg:hidden">
+          <div className="grid grid-cols-7 gap-0.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = screen === item.id;
               return (
                 <button key={item.id} onClick={() => setScreen(item.id)}
-                  className={`flex flex-col items-center gap-1 py-2 rounded-lg transition-colors ${
+                  className={`flex flex-col items-center gap-0.5 py-1.5 rounded-lg transition-colors ${
                     active ? 'text-[#0e6b47]' : 'text-[#6b6359] hover:text-[#1a1410]'
                   }`}>
-                  <Icon className="w-5 h-5" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
+                  <Icon className="w-4 h-4" />
+                  <span className="text-[8px] font-bold uppercase tracking-wide leading-tight text-center">{item.label}</span>
                 </button>
               );
             })}
