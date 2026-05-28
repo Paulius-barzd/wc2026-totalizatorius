@@ -594,8 +594,8 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
                 <button onClick={handleSave} disabled={!hasChanges || saving || justSaved}
                   style={(!hasChanges || justSaved) && !saving
                     ? { backgroundColor: '#FAF0E0', color: '#845641' }
-                    : { backgroundColor: '#54130E', color: '#ffffff' }}
-                  className={`${prediction ? 'flex-1' : 'w-full'} py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all`}>
+                    : { background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+                  className={`${prediction ? 'flex-1' : 'w-full'} py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98]`}>
                   {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   {justSaved && <CheckCircle2 className="w-3.5 h-3.5" />}
                   {saving ? 'Saugoma...' : justSaved ? 'Išsaugota' : prediction ? 'Atnaujinti' : 'Patvirtinti spėjimą'}
@@ -840,7 +840,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
 
           <div className="grid grid-cols-2 gap-2 mt-5">
             <button onClick={handleLogin} disabled={loading}
-              style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 100%)', color: '#ffffff' }}
+              style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
               className="py-3 rounded-xl font-display uppercase tracking-wider shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:brightness-110 active:scale-[0.98]">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Prisijungti
@@ -928,12 +928,12 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
 
         {/* Gradient border wrapper - kortelė su VMG brand spalvomis */}
         <div className="relative rounded-2xl p-[1.5px] shadow-xl transition-shadow duration-300 hover:shadow-2xl"
-          style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 40%, #D1A974 100%)' }}>
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 40%, #D1A974 100%)' }}>
           <div className="bg-white rounded-2xl p-6">
             {/* Header - kamuolio ikona dėžutėje su gradient'u + gradient text */}
             <div className="flex items-center gap-3 mb-2">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:rotate-6"
-                style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 100%)' }}>
+                style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)' }}>
                 <FootballIcon className="w-6 h-6 text-[#D1A974]" />
               </div>
               <h2 className="font-display text-xl uppercase tracking-wider"
@@ -987,7 +987,7 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
 
             {/* Submit mygtukas su gradient + scale hover + shadow grow */}
             <button onClick={handleRegister} disabled={loading}
-              style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 100%)' }}
+              style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)' }}
               className="w-full py-3.5 rounded-xl font-display uppercase tracking-wider text-white shadow-lg text-sm mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:brightness-110 active:scale-[0.98]">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Sukurti paskyrą
@@ -1066,7 +1066,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div className="relative overflow-hidden rounded-2xl p-5 lg:p-7 paper-grain"
-        style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 60%, #54130E 100%)', color: '#FFFFFF' }}>
+        style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #845641 50%, #5C3E2E 100%)', color: '#FFFFFF' }}>
         <div className="flex items-start gap-4 mb-4">
           <Emblem className="w-16 h-16 lg:w-20 lg:h-20 flex-shrink-0" variant="dark" />
           <div className="flex-1 min-w-0">
@@ -1391,8 +1391,8 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
           <button onClick={handleSave} disabled={!hasChanges || saving || justSaved || !hasAnyValue}
             style={(!hasChanges || justSaved || !hasAnyValue) && !saving
               ? { backgroundColor: '#FAF0E0', color: '#845641' }
-              : { backgroundColor: '#54130E', color: '#ffffff' }}
-            className={`${hasSavedPrediction ? 'flex-1' : 'w-full'} py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all`}>
+              : { background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+            className={`${hasSavedPrediction ? 'flex-1' : 'w-full'} py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98]`}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {justSaved && <CheckCircle2 className="w-4 h-4" />}
             {saving ? 'Saugoma...' : justSaved ? 'Išsaugota' : hasSavedPrediction ? 'Atnaujinti prognozes' : 'Patvirtinti prognozes'}
@@ -1813,8 +1813,8 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
 
       {userProfile.isAdmin && (
         <button onClick={onOpenAdmin}
-          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-          className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-opacity hover:opacity-90 text-sm flex items-center justify-center gap-2">
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+          className="w-full py-3 rounded-xl font-display uppercase tracking-wider shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] text-sm flex items-center justify-center gap-2">
           <Settings className="w-4 h-4" /> Administratoriaus skydas
         </button>
       )}
@@ -2441,8 +2441,8 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
       </div>
       {!isLocked && !noTeams && hasChanges && (
         <button onClick={handleSave} disabled={saving}
-          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-          className="w-full mt-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1">
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+          className="w-full mt-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-1">
           {saving && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
           Patvirtinti
         </button>
@@ -2634,8 +2634,8 @@ const AdminCompaniesPanel = ({ companies, users }) => {
           <button
             onClick={handleCreate}
             disabled={busy || !newName.trim()}
-            style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
+            style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-1 whitespace-nowrap">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             <Plus className="w-3.5 h-3.5" /> Pridėti
           </button>
@@ -2699,8 +2699,8 @@ const AdminCompaniesPanel = ({ companies, users }) => {
                 {isEditing ? (
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={handleSaveEdit} disabled={busy || !editName.trim()}
-                      style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50">
+                      style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all duration-200 hover:scale-[1.03] hover:brightness-110 active:scale-[0.97] disabled:opacity-50">
                       Saugoti
                     </button>
                     <button onClick={() => { setEditingId(null); setEditName(''); setEditCode(''); }}
@@ -2841,7 +2841,7 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
           </div>
           <button onClick={handleMigrate} disabled={migrating}
             style={{ backgroundColor: '#D1A974', color: '#ffffff' }}
-            className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2">
+            className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
             {migrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Perkelti privačius duomenis ({usersNeedingMigration})
           </button>
@@ -2902,8 +2902,8 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
                     disabled={isBusy}
                     style={u.isAdmin
                       ? { backgroundColor: '#ffffff', color: '#6A1107', border: '1px solid rgba(106, 17, 7, 0.3)' }
-                      : { backgroundColor: '#54130E', color: '#ffffff' }}
-                    className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
+                      : { background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+                    className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-1 whitespace-nowrap">
                     {isBusy && <Loader2 className="w-3 h-3 animate-spin" />}
                     {u.isAdmin ? 'Atimti teises' : 'Suteikti teises'}
                   </button>
@@ -3050,9 +3050,9 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
 
       <button onClick={handleSave} disabled={saving || justSaved}
         style={justSaved
-          ? { backgroundColor: '#54130E', color: '#ffffff' }
-          : { backgroundColor: '#54130E', color: '#ffffff' }}
-        className="w-full py-3 rounded-xl font-display uppercase tracking-wider text-xs disabled:opacity-60 flex items-center justify-center gap-2">
+          ? { background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }
+          : { background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+        className="w-full py-3 rounded-xl font-display uppercase tracking-wider text-xs disabled:opacity-60 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
         {saving && <Loader2 className="w-4 h-4 animate-spin" />}
         {justSaved && <CheckCircle2 className="w-4 h-4" />}
         {saving ? 'Saugoma...' : justSaved ? 'Išsaugota' : 'Išsaugoti rezultatus'}
@@ -3260,8 +3260,8 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         </div>
 
         <button onClick={handleSyncFromAPI} disabled={seeding}
-          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Atnaujinti rezultatus iš API
         </button>
@@ -3279,15 +3279,15 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         </div>
 
         <button onClick={handleSeedWC2026} disabled={seeding}
-          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Įkelti PFČ 2026 rungtynes (72)
         </button>
 
         <button onClick={handleSeedKnockout} disabled={seeding}
-          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
           Sukurti atkrintamųjų etapą (32)
         </button>
@@ -3295,12 +3295,12 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSeed} disabled={seeding}
             style={{ backgroundColor: '#845641', color: '#ffffff' }}
-            className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
+            className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-1">
             Sukurti 8 testines
           </button>
           <button onClick={handleDeleteDemo} disabled={seeding}
             style={{ backgroundColor: '#6A1107', color: '#ffffff' }}
-            className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
+            className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-1">
             Ištrinti testines
           </button>
         </div>
@@ -3384,7 +3384,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
                 </select>
                 <div className="flex gap-2">
                   <button onClick={handleSaveEdit}
-                    style={{ backgroundColor: '#54130E', color: '#ffffff' }}
+                    style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
                     className="flex-1 py-1.5 rounded text-xs font-bold uppercase tracking-wider">
                     Išsaugoti
                   </button>
