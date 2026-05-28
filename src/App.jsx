@@ -1821,17 +1821,17 @@ const RulesScreen = () => {
             label="Geriausias turnyro žaidėjas"
             points={15}
             color="#b8860b"
-            example="FIFA „Auksinio kamuolio" laimėtojas" />
+            example={'FIFA „Auksinio kamuolio" laimėtojas'} />
           <PointsRow
             label="Daugiausiai įvarčių įmušęs žaidėjas"
             points={15}
             color="#0e6b47"
-            example="FIFA „Auksinės bato" laimėtojas" />
+            example={'FIFA „Auksinio bato" laimėtojas'} />
           <PointsRow
             label="Geriausias vartininkas"
             points={15}
             color="#0a2c4e"
-            example="FIFA „Auksinės pirštinės" laimėtojas" />
+            example={'FIFA „Auksinės pirštinės" laimėtojas'} />
           <PointsRow
             label="Geriausias 21 m. ar jaunesnis žaidėjas"
             points={15}
