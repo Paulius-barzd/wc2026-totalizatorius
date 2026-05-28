@@ -671,34 +671,18 @@ const FormField = ({ label, type = 'text', placeholder, value, onChange, autoCom
   </div>
 );
 
-// Futbolo kamuolio ikona — pilna pentagon/hexagon paneliais + 3D sheen efektas.
-// Naudoja currentColor → adaptuojasi prie konteksto spalvos.
+// Futbolo kamuolio ikona - klasiškas line art stilius, currentColor adaptuojasi.
+// Efektai (gradient fonas, hover scale/rotate) yra ikonos WRAPPER'yje, ne čia.
 const FootballIcon = ({ className = 'w-5 h-5' }) => (
-  <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <radialGradient id="ballSheen" cx="35%" cy="30%" r="65%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.55" />
-        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    {/* Pagrindinis kamuolio apskritimas su švelniu užpildymu */}
-    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.12" stroke="currentColor" strokeWidth="1.6" />
-    {/* Centrinis pentagonas - tamsus */}
-    <polygon points="12,7 15.8,9.8 14.4,14.5 9.6,14.5 8.2,9.8" fill="currentColor" />
-    {/* 5 šoniniai pentagonai - šiek tiek šviesesni (subtilesnis raštas) */}
-    <polygon points="12,3 14.2,5.5 12,7 9.8,5.5" fill="currentColor" opacity="0.55" />
-    <polygon points="20.5,8.5 18.5,11 15.8,9.8 17,6.8" fill="currentColor" opacity="0.55" />
-    <polygon points="3.5,8.5 5.5,11 8.2,9.8 7,6.8" fill="currentColor" opacity="0.55" />
-    <polygon points="7,20 9,17 11.5,18.5 10,21" fill="currentColor" opacity="0.55" />
-    <polygon points="17,20 15,17 12.5,18.5 14,21" fill="currentColor" opacity="0.55" />
-    {/* Panelių jungtys */}
-    <line x1="12" y1="7" x2="12" y2="5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <line x1="15.8" y1="9.8" x2="17" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <line x1="8.2" y1="9.8" x2="7" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <line x1="14.4" y1="14.5" x2="15" y2="16.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <line x1="9.6" y1="14.5" x2="9" y2="16.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    {/* 3D sheen highlight */}
-    <circle cx="12" cy="12" r="10" fill="url(#ballSheen)" />
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="12,7 16,10 14.5,15 9.5,15 8,10" />
+    <line x1="12" y1="7" x2="12" y2="3" />
+    <line x1="16" y1="10" x2="20" y2="9" />
+    <line x1="8" y1="10" x2="4" y2="9" />
+    <line x1="14.5" y1="15" x2="17.5" y2="19" />
+    <line x1="9.5" y1="15" x2="6.5" y2="19" />
   </svg>
 );
 
@@ -818,21 +802,27 @@ const LoginScreen = ({ onSwitchToRegister }) => {
       <Styles />
       <div className="max-w-md w-full">
         <div className="relative overflow-hidden rounded-2xl p-6 paper-grain mb-4"
-          style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 60%, #54130E 100%)', color: '#FFFFFF' }}>
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #845641 50%, #5C3E2E 100%)', color: '#FFFFFF' }}>
+          {/* Full VMG logotipas - su W mark + VMG tekstu. Stipriai kontrastingas su STEM brown fonu */}
           <div className="flex justify-center mb-4">
-            <Emblem className="w-24 h-24" variant="dark" />
+            <Emblem className="w-36 h-32 lg:w-40 lg:h-36" variant="dark" full />
           </div>
           <h1 className="font-display text-center text-xl leading-tight">
             PASAULIO FUTBOLO<br/>ČEMPIONATAS
           </h1>
           <div className="flex items-center justify-center gap-3 my-3">
-            <div className="h-px w-12" style={{ background: 'rgba(209, 169, 116, 0.6)' }}/>
+            <div className="h-px w-12" style={{ background: 'rgba(209, 169, 116, 0.8)' }}/>
             <span className="font-display text-base" style={{ color: '#D1A974', letterSpacing: '2px' }}>2026</span>
-            <div className="h-px w-12" style={{ background: 'rgba(209, 169, 116, 0.6)' }}/>
+            <div className="h-px w-12" style={{ background: 'rgba(209, 169, 116, 0.8)' }}/>
           </div>
           <p className="font-display text-center text-sm tracking-widest opacity-90">TOTALIZATORIUS</p>
-          <p className="text-[10px] uppercase tracking-widest opacity-60 mt-3 text-center">
-            Įrodyk, kas čia futbolo ekspertas · birž. 11 — liep. 19
+          {/* Slogan - viena eilutė */}
+          <p className="text-[10px] uppercase tracking-widest opacity-80 mt-3 text-center">
+            Įrodyk, kas čia futbolo ekspertas
+          </p>
+          {/* Datos - atskira eilutė po slogan'u */}
+          <p className="font-mono text-[11px] mt-1.5 text-center" style={{ color: '#D1A974' }}>
+            BIRŽ. 11 — LIEP. 19
           </p>
         </div>
 
