@@ -1681,9 +1681,282 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
   );
 };
 
+// === GROUPS SCREEN (grupių etapo lentelės) ===
+
+// Apskaičiuoja vienos grupės standings pagal baigtas rungtynes.
+// FIFA tiebreakers: taškai → gol skirtumas → įmušti įvarčiai → tarpusavio rungtynės (praleidžiame, retas atvejis)
+const calculateStandings = (groupTeams, groupMatches) => {
+  const stats = {};
+  groupTeams.forEach((code) => {
+    stats[code] = { code, P: 0, W: 0, D: 0, L: 0, GF: 0, GA: 0, GD: 0, pts: 0 };
+  });
+
+  groupMatches.forEach((m) => {
+    if (m.status !== 'finished' || !m.actualScore) return;
+    const home = stats[m.home];
+    const away = stats[m.away];
+    if (!home || !away) return;
+    home.P++; away.P++;
+    home.GF += m.actualScore.home;
+    home.GA += m.actualScore.away;
+    away.GF += m.actualScore.away;
+    away.GA += m.actualScore.home;
+    if (m.actualScore.home > m.actualScore.away) {
+      home.W++; home.pts += 3; away.L++;
+    } else if (m.actualScore.home < m.actualScore.away) {
+      away.W++; away.pts += 3; home.L++;
+    } else {
+      home.D++; away.D++; home.pts++; away.pts++;
+    }
+  });
+
+  Object.values(stats).forEach((s) => { s.GD = s.GF - s.GA; });
+  return Object.values(stats).sort((a, b) =>
+    b.pts - a.pts || b.GD - a.GD || b.GF - a.GF
+  );
+};
+
+// Spalvos pozicijai: 1-2 vieta - kvalifikuojasi (žalia), 3 vieta - galimai geriausių 8 (geltona), 4 vieta - eliminuotas (pilka)
+const positionStyle = (pos) => {
+  if (pos === 1) return { dot: '#0e6b47', label: 'text-[#0e6b47]' };
+  if (pos === 2) return { dot: '#0e6b47', label: 'text-[#0e6b47]' };
+  if (pos === 3) return { dot: '#b8860b', label: 'text-[#b8860b]' };
+  return { dot: '#9d9489', label: 'text-[#6b6359]' };
+};
+
+const GroupStandingsTable = ({ groupId, teams, matches }) => {
+  const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
+  const sortedMatches = useMemo(
+    () => [...matches].sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
+    [matches]
+  );
+
+  return (
+    <div className="card-light rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-lg text-[#1a1410]">GRUPĖ {groupId}</h3>
+        <div className="text-[10px] text-[#6b6359] uppercase tracking-wider">
+          {standings.filter((s) => s.P > 0).length}/{teams.length} žaidė
+        </div>
+      </div>
+
+      {/* Standings lentelė */}
+      <div className="overflow-x-auto -mx-1 px-1 mb-4">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[9px] uppercase tracking-wider text-[#6b6359] border-b border-[#1a1410]/10">
+              <th className="text-left py-2 w-6">#</th>
+              <th className="text-left py-2">Komanda</th>
+              <th className="text-center py-2 w-7" title="Žaidžiamos">Ž</th>
+              <th className="text-center py-2 w-7" title="Laimėtos">L</th>
+              <th className="text-center py-2 w-7" title="Lygiosios">Lg</th>
+              <th className="text-center py-2 w-7" title="Pralaimėtos">P</th>
+              <th className="text-center py-2 w-10" title="Įvarčių skirtumas">+/-</th>
+              <th className="text-center py-2 w-8 font-bold" title="Taškai">Tšk</th>
+            </tr>
+          </thead>
+          <tbody>
+            {standings.map((s, i) => {
+              const pos = i + 1;
+              const team = teamsByCode[s.code];
+              const style = positionStyle(pos);
+              return (
+                <tr key={s.code} className="border-b border-[#1a1410]/5 last:border-0">
+                  <td className="py-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1 h-4 rounded-full" style={{ backgroundColor: style.dot }} />
+                      <span className={`font-mono text-[10px] ${style.label}`}>{pos}</span>
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Flag code={team?.code} className="w-5 h-3.5 flex-shrink-0" />
+                      <span className="text-[11px] font-semibold text-[#1a1410] truncate">
+                        {team?.name || s.code}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="text-center font-mono text-[#6b6359]">{s.P}</td>
+                  <td className="text-center font-mono text-[#0e6b47]">{s.W}</td>
+                  <td className="text-center font-mono text-[#b8860b]">{s.D}</td>
+                  <td className="text-center font-mono text-[#c8302e]">{s.L}</td>
+                  <td className="text-center font-mono text-[#1a1410]">
+                    {s.GD > 0 ? `+${s.GD}` : s.GD}
+                  </td>
+                  <td className="text-center font-mono font-bold text-[#1a1410]">{s.pts}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Rungtynių sąrašas */}
+      <div className="border-t border-[#1a1410]/10 pt-3">
+        <div className="text-[9px] uppercase tracking-wider text-[#6b6359] mb-2">Rungtynės</div>
+        <div className="space-y-1.5">
+          {sortedMatches.map((m) => {
+            const home = teamsByCode[m.home];
+            const away = teamsByCode[m.away];
+            const isFinished = m.status === 'finished' && m.actualScore;
+            const isLive = m.status === 'live';
+            return (
+              <div key={m.id} className="flex items-center gap-2 text-[11px]">
+                <span className="text-[9px] text-[#6b6359] w-20 flex-shrink-0">
+                  {formatKickoff(m.kickoff).split(' · ')[0]}
+                </span>
+                <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+                  <span className="text-[#1a1410] truncate text-right">{home?.name}</span>
+                  <Flag code={home?.code} className="w-4 h-3 flex-shrink-0" />
+                </div>
+                <div className="font-mono text-xs font-bold w-12 text-center flex-shrink-0">
+                  {isFinished ? (
+                    <span className="text-[#1a1410]">{m.actualScore.home}:{m.actualScore.away}</span>
+                  ) : isLive ? (
+                    <span className="text-[#c8302e]">
+                      {m.actualScore?.home ?? '−'}:{m.actualScore?.away ?? '−'}
+                    </span>
+                  ) : (
+                    <span className="text-[#9d9489]">vs</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <Flag code={away?.code} className="w-4 h-3 flex-shrink-0" />
+                  <span className="text-[#1a1410] truncate">{away?.name}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const GroupsScreen = ({ matches }) => {
+  // Grupės dinamiškai iš matches: kiekviena grupė turi komandų sąrašą
+  const groupsData = useMemo(() => {
+    const data = {};
+    matches.forEach((m) => {
+      if (!m.group || m.stage !== 'group') return;
+      if (!data[m.group]) data[m.group] = { teams: new Set(), matches: [] };
+      if (m.home) data[m.group].teams.add(m.home);
+      if (m.away) data[m.group].teams.add(m.away);
+      data[m.group].matches.push(m);
+    });
+    // Konvertuoti į rūšiuotą array
+    return Object.keys(data).sort().map((id) => ({
+      id,
+      teams: Array.from(data[id].teams),
+      matches: data[id].matches,
+    }));
+  }, [matches]);
+
+  if (groupsData.length === 0) {
+    return (
+      <div className="space-y-4 pb-24 lg:pb-8">
+        <div>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">GRUPĖS</h1>
+          <p className="text-sm text-[#6b6359]">12 grupių · po 4 komandas</p>
+        </div>
+        <div className="card-light rounded-xl p-6 text-center">
+          <AlertCircle className="w-8 h-8 text-[#b8860b] mx-auto mb-2" />
+          <p className="text-sm text-[#1a1410] font-semibold mb-1">Grupių dar nėra</p>
+          <p className="text-xs text-[#6b6359]">Administratorius dar nesukūrė PFČ 2026 rungtynių.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 pb-24 lg:pb-8">
+      <div>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">GRUPĖS</h1>
+        <p className="text-sm text-[#6b6359]">
+          {groupsData.length} grupės · po 1-2 vietą kvalifikuojasi tiesiogiai · po 3 vietą — 8 geriausi
+        </p>
+      </div>
+
+      {/* Legenda */}
+      <div className="card-light rounded-xl p-3 flex flex-wrap items-center gap-4 text-[11px]">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-3 rounded-full bg-[#0e6b47]" />
+          <span className="text-[#1a1410]">1-2 vieta — į knockout</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-3 rounded-full bg-[#b8860b]" />
+          <span className="text-[#1a1410]">3 vieta — galimai (8 geriausi iš 12)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-3 rounded-full bg-[#9d9489]" />
+          <span className="text-[#1a1410]">4 vieta — eliminuota</span>
+        </div>
+      </div>
+
+      {/* Grupių lentelės - desktop'e 2-col grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {groupsData.map((g) => (
+          <GroupStandingsTable key={g.id} groupId={g.id} teams={g.teams} matches={g.matches} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // === BRACKET SCREEN (knockout vizualizacija) ===
 
 const KNOCKOUT_STAGES = ['round_of_32', 'round_of_16', 'quarter_final', 'semi_final', 'third_place', 'final'];
+
+// Knockout match'ų placeholder'iai - kuri grupė/etapas tiekia komandas į šitą slot'ą.
+// Naudojami kai team yra null (komandos dar nepriskirtos). Admin gali bet kada
+// rankiniu būdu priskirti tikras komandas per Admin → Rungtynės → Redaguoti.
+// PASTABA: tikslus WC 2026 bracket'as gali skirtis - tai geriausias spėjimas pagal
+// tipinę 32-team knockout struktūrą (8 geriausi 3 vietos kvalifikuojasi).
+const KNOCKOUT_PLACEHOLDERS = {
+  // Round of 32 - grupių etapo lyderiai vs runner-up'ai vs 3 vietos geriausi
+  k01: { home: '1A', away: '2C' },
+  k02: { home: '1C', away: '3 vieta (D/E/F)' },
+  k03: { home: '1B', away: '3 vieta (E/F/I/J)' },
+  k04: { home: '1F', away: '3 vieta (A/B/C/D)' },
+  k05: { home: '1D', away: '2E' },
+  k06: { home: '1G', away: '3 vieta (E/H/J/K)' },
+  k07: { home: '1J', away: '3 vieta (F/G/L)' },
+  k08: { home: '1H', away: '2K' },
+  k09: { home: '1E', away: '2L' },
+  k10: { home: '1L', away: '3 vieta (A/B/C/F)' },
+  k11: { home: '2A', away: '2D' },
+  k12: { home: '1K', away: '3 vieta (B/D/I/L)' },
+  k13: { home: '2B', away: '2I' },
+  k14: { home: '1I', away: '3 vieta (A/C/G/H)' },
+  k15: { home: '2F', away: '2G' },
+  k16: { home: '2H', away: '2J' },
+  // Round of 16 - tiesiog 1/16 nugalėtojai
+  k17: { home: '1/16 #1 nug.', away: '1/16 #2 nug.' },
+  k18: { home: '1/16 #3 nug.', away: '1/16 #4 nug.' },
+  k19: { home: '1/16 #5 nug.', away: '1/16 #6 nug.' },
+  k20: { home: '1/16 #7 nug.', away: '1/16 #8 nug.' },
+  k21: { home: '1/16 #9 nug.', away: '1/16 #10 nug.' },
+  k22: { home: '1/16 #11 nug.', away: '1/16 #12 nug.' },
+  k23: { home: '1/16 #13 nug.', away: '1/16 #14 nug.' },
+  k24: { home: '1/16 #15 nug.', away: '1/16 #16 nug.' },
+  // Quarter finals
+  k25: { home: '1/8 #1 nug.', away: '1/8 #2 nug.' },
+  k26: { home: '1/8 #3 nug.', away: '1/8 #4 nug.' },
+  k27: { home: '1/8 #5 nug.', away: '1/8 #6 nug.' },
+  k28: { home: '1/8 #7 nug.', away: '1/8 #8 nug.' },
+  // Semi finals
+  k29: { home: '¼ #1 nug.', away: '¼ #2 nug.' },
+  k30: { home: '¼ #3 nug.', away: '¼ #4 nug.' },
+  // 3rd place playoff
+  k31: { home: '½ #1 pralaim.', away: '½ #2 pralaim.' },
+  // Final
+  k32: { home: '½ #1 nug.', away: '½ #2 nug.' },
+};
+
+const getPlaceholder = (match, side) => {
+  // Pirma bandyti pagal match ID, fallback į TBD
+  return KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'TBD';
+};
 
 // Mini match cell bracket'ui (kompaktiškas, su prognozės input'u)
 const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
@@ -1729,7 +2002,7 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
           <div className="flex items-center gap-1.5 min-w-0">
             <Flag code={home?.code} className="w-5 h-3.5 flex-shrink-0" />
             <span className="text-[11px] font-semibold text-[#1a1410] truncate">
-              {home?.name || <span className="text-[#9d9489]">TBD</span>}
+              {home?.name || <span className="text-[#9d9489] italic">{getPlaceholder(match, 'home')}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
@@ -1748,7 +2021,7 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
           <div className="flex items-center gap-1.5 min-w-0">
             <Flag code={away?.code} className="w-5 h-3.5 flex-shrink-0" />
             <span className="text-[11px] font-semibold text-[#1a1410] truncate">
-              {away?.name || <span className="text-[#9d9489]">TBD</span>}
+              {away?.name || <span className="text-[#9d9489] italic">{getPlaceholder(match, 'away')}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
@@ -2821,6 +3094,7 @@ export default function App() {
   const navItems = [
     { id: 'home', icon: Home, label: 'Pradžia' },
     { id: 'matches', icon: Calendar, label: 'Rungtynės' },
+    { id: 'groups', icon: Shield, label: 'Grupės' },
     { id: 'bracket', icon: Award, label: 'Bracket' },
     { id: 'tournament', icon: Trophy, label: 'Prognozės' },
     { id: 'leaderboard', icon: BarChart3, label: 'Lyderiai' },
@@ -2870,6 +3144,7 @@ export default function App() {
             matches={matches} predictions={predictions} setScreen={setScreen} onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'matches' && <MatchesScreen matches={matches} predictions={predictions}
             onUpdatePrediction={handleUpdatePrediction} />}
+          {screen === 'groups' && <GroupsScreen matches={matches} />}
           {screen === 'bracket' && <BracketScreen matches={matches} predictions={predictions}
             onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'tournament' && <TournamentScreen userProfile={userProfile} matches={matches}
@@ -2883,7 +3158,7 @@ export default function App() {
 
         {/* Mobile bottom nav - desktop'e paslėpta (header'io tabs naudojami) */}
         <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-light px-2 py-2 z-30 lg:hidden">
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-6 gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = screen === item.id;
