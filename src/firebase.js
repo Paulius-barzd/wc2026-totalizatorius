@@ -723,11 +723,26 @@ const API_STAGE_TO_INTERNAL = {
 // Pagrindinė sinchronizavimo funkcija
 // Kviečia Netlify Function (tarpininkas), kuri jau turi API raktą serveryje
 // Tai sprendžia CORS problemą + raktas paslėptas serveryje
+// Reikalauja admin teisių (verifikuoja serveryje per Firebase ID token).
 export async function syncResultsFromAPI() {
-  // Užklausa per mūsų Netlify Function (ne tiesiai į football-data.org)
+  // Gauti dabartinio vartotojo ID token'ą - reikalingas Netlify Function autentifikacijai
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('Reikia būti prisijungusiam, kad galėtum sinchronizuoti.');
+  }
+  let idToken;
+  try {
+    idToken = await user.getIdToken();
+  } catch (err) {
+    throw new Error('Nepavyko gauti autentifikacijos token\'o: ' + err.message);
+  }
+
+  // Užklausa per mūsų Netlify Function su Bearer token
   let response;
   try {
-    response = await fetch('/.netlify/functions/sync-results');
+    response = await fetch('/.netlify/functions/sync-results', {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
   } catch (err) {
     throw new Error('Nepavyko susisiekti su sinchronizacijos funkcija. Patikrink internetą.');
   }

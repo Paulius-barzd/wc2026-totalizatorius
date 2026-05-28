@@ -197,7 +197,7 @@ const translateAuthError = (code) => {
   const map = {
     'auth/invalid-email': 'Neteisingas el. pašto formatas',
     'auth/email-already-in-use': 'Šis el. paštas jau užregistruotas',
-    'auth/weak-password': 'Per silpnas slaptažodis (bent 6 simboliai)',
+    'auth/weak-password': 'Per silpnas slaptažodis (bent 8 simboliai, su raide ir skaičiumi)',
     'auth/user-not-found': 'Toks vartotojas nerastas',
     'auth/wrong-password': 'Neteisingas slaptažodis',
     'auth/invalid-credential': 'Neteisingas el. paštas arba slaptažodis',
@@ -358,7 +358,7 @@ const StatusBadge = ({ status }) => {
     return (
       <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#c8302e]/10 border border-[#c8302e]/25">
         <span className="w-1.5 h-1.5 rounded-full bg-[#c8302e] pulse-live" />
-        <span className="text-[10px] font-bold text-[#c8302e] uppercase tracking-wider">Live</span>
+        <span className="text-[10px] font-bold text-[#c8302e] uppercase tracking-wider">Tiesiogiai</span>
       </div>
     );
   }
@@ -526,7 +526,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
               </span>
               {tu && (
                 <span className="text-[10px] font-mono text-[#6b6359]">
-                  Spėjimas baigsis už {tu}
+                  Iki uždarymo liko {tu}
                 </span>
               )}
             </div>
@@ -769,7 +769,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
           </div>
           <p className="font-display text-center text-sm tracking-widest opacity-90">TOTALIZATORIUS</p>
           <p className="text-[10px] uppercase tracking-widest opacity-60 mt-3 text-center">
-            Vidinis pulas · birž. 11 — liep. 19
+            Vidinis totalizatorius · birž. 11 — liep. 19
           </p>
         </div>
 
@@ -823,11 +823,19 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
       return;
     }
     if (!form.companyChoice) {
-      setError('Pasirink įmonę (arba "Be įmonės")');
+      setError('Pasirink įmonę (arba „Be įmonės")');
       return;
     }
-    if (form.password.length < 6) {
-      setError('Slaptažodis turi būti bent 6 simboliai');
+    if (form.password.length < 8) {
+      setError('Slaptažodis turi būti bent 8 simboliai');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(form.password)) {
+      setError('Slaptažodyje turi būti bent viena raidė');
+      return;
+    }
+    if (!/\d/.test(form.password)) {
+      setError('Slaptažodyje turi būti bent vienas skaičius');
       return;
     }
     if (form.username.length < 3) {
@@ -882,7 +890,7 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
               value={form.fullName} onChange={updateField('fullName')} autoComplete="name" />
             <FormField label="El. paštas" type="email" placeholder="vardas@example.com"
               value={form.email} onChange={updateField('email')} autoComplete="email" />
-            <FormField label="Slaptažodis" type="password" placeholder="Bent 6 simboliai"
+            <FormField label="Slaptažodis" type="password" placeholder="Bent 8 simb. (raidė + skaičius)"
               value={form.password} onChange={updateField('password')} autoComplete="new-password" />
 
             {/* Company dropdown */}
@@ -903,7 +911,7 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
               </select>
               {companies.length === 0 && (
                 <p className="text-[10px] text-[#6b6359] mt-1">
-                  Įmonių dar nėra. Gali pasirinkti "Be įmonės" arba palaukti kol admin'as pridės.
+                  Įmonių dar nėra. Gali pasirinkti „Be įmonės" arba palaukti, kol administratorius pridės.
                 </p>
               )}
             </div>
@@ -1076,7 +1084,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
           { id: 'all', label: 'Visos' },
           { id: 'upcoming', label: 'Būsimos' },
           { id: 'finished', label: 'Baigtos' },
-          { id: 'knockout', label: 'Knockout' },
+          { id: 'knockout', label: 'Atkrintamosios' },
           { id: 'A', label: 'A' }, { id: 'B', label: 'B' }, { id: 'C', label: 'C' },
           { id: 'D', label: 'D' }, { id: 'E', label: 'E' }, { id: 'F', label: 'F' },
           { id: 'G', label: 'G' }, { id: 'H', label: 'H' }, { id: 'I', label: 'I' },
@@ -1237,8 +1245,8 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
         <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">PROGNOZĖS</h1>
         <p className="text-sm text-[#6b6359]">
           {isLocked
-            ? 'Prognozės užšaldytos · turnyras prasidėjęs'
-            : `Spėjimas galimas iki pirmųjų rungtynių${tu ? ` · baigsis už ${tu}` : ''}`}
+            ? 'Prognozės užšaldytos · turnyras jau prasidėjęs'
+            : `Prognozes galima keisti iki pirmųjų rungtynių${tu ? ` · liko ${tu}` : ''}`}
         </p>
       </div>
 
@@ -1483,7 +1491,7 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                 <Settings className="w-6 h-6 text-[#6b6359]" />
               </div>
               <p className="text-sm font-bold text-[#1a1410] mb-1">Tu nepriklausai įmonei</p>
-              <p className="text-xs text-[#6b6359]">Susisiek su admin'u, kad priskirtų tave įmonei.</p>
+              <p className="text-xs text-[#6b6359]">Susisiek su administratoriumi, kad priskirtų tave įmonei.</p>
             </div>
           ) : (
             <>
@@ -1737,9 +1745,9 @@ const RulesScreen = () => {
       {/* Apžvalga */}
       <RuleSection icon={Info} title="Apžvalga" color="#0a2c4e">
         <p className="text-sm text-[#1a1410] leading-relaxed">
-          PFČ 2026 Totalizatorius — vidinis pulas pasaulio futbolo čempionato 2026 metų laidos prognozavimui.
-          Spėk kiekvienos rungtynių rezultatą bei turnyro pabaigos statistiką (čempionas, geriausi žaidėjai)
-          ir rinkis taškus. Lyderis paaiškės po finalo.
+          PFČ 2026 totalizatorius — vidinis pasaulio futbolo čempionato 2026 m. spėjimų ratas.
+          Spėk kiekvienų rungtynių rezultatą bei turnyro pabaigos statistiką (čempionas, geriausi žaidėjai)
+          ir rink taškus. Nugalėtojas paaiškės po finalo.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
           <div className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
@@ -1748,7 +1756,7 @@ const RulesScreen = () => {
           </div>
           <div className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
             <div className="text-[#6b6359] uppercase tracking-wider text-[9px]">Iš viso rungtynių</div>
-            <div className="font-bold text-[#1a1410]">72 grupių + 32 knockout</div>
+            <div className="font-bold text-[#1a1410]">72 grupių + 32 atkrintamųjų</div>
           </div>
         </div>
       </RuleSection>
@@ -1756,18 +1764,18 @@ const RulesScreen = () => {
       {/* Kaip dalyvauti */}
       <RuleSection icon={CheckCircle2} title="Kaip dalyvauti" color="#0e6b47">
         <ol className="space-y-2 text-sm text-[#1a1410]">
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">1.</span>Užsiregistruok, pasirink savo įmonę (arba „Be įmonės")</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">1.</span>Užsiregistruok ir pasirink savo įmonę (arba „Be įmonės")</li>
           <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">2.</span>Iki turnyro pradžios suvesk turnyro prognozes (čempionas + 4 žaidėjų kategorijos)</li>
           <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">3.</span>Prieš kiekvienas rungtynes spėk rezultatą</li>
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">4.</span>Po kiekvienos rungtynės taškai pridedami automatiškai</li>
-          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">5.</span>Sek savo poziciją Lyderiai skiltyje</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">4.</span>Po kiekvienų rungtynių taškai pridedami automatiškai</li>
+          <li className="flex gap-2"><span className="font-mono font-bold text-[#0e6b47]">5.</span>Sek savo poziciją Lyderių skiltyje</li>
         </ol>
       </RuleSection>
 
       {/* Rungtynių prognozės - taškai */}
       <RuleSection icon={Target} title="Rungtynių prognozės" color="#0e6b47">
         <p className="text-xs text-[#6b6359] mb-3">
-          Už kiekvieną pasibaigusią rungtynę gauni taškus pagal tai, kaip arti tikro rezultato atspėjai.
+          Už kiekvienas pasibaigusias rungtynes gauni taškų pagal tai, kaip arti tikro rezultato atspėjai.
         </p>
         <div>
           <PointsRow
@@ -1776,15 +1784,15 @@ const RulesScreen = () => {
             color="#0e6b47"
             example="Tikras 2:1 · spėjai 2:1 → +5 tšk." />
           <PointsRow
-            label="Teisingas gol skirtumas"
+            label="Teisingas įvarčių skirtumas"
             points={3}
             color="#b8860b"
-            example="Tikras 2:1 · spėjai 3:2 (abu skirtumas +1) → +3 tšk." />
+            example="Tikras 2:1 · spėjai 3:2 (abiejų skirtumas +1) → +3 tšk." />
           <PointsRow
-            label="Tik teisinga baigtis (laimėtojas / lygiosios)"
+            label="Tik teisinga baigtis (nugalėtojas arba lygiosios)"
             points={2}
             color="#0a2c4e"
-            example="Tikras 2:1 · spėjai 4:1 (abu laimi šeimininkai) → +2 tšk." />
+            example="Tikras 2:1 · spėjai 4:1 (abiem atvejais nugali šeimininkai) → +2 tšk." />
           <PointsRow
             label="Pro šalį"
             points={0}
@@ -1793,7 +1801,7 @@ const RulesScreen = () => {
         </div>
         <div className="mt-3 rounded-lg bg-[#0e6b47]/5 border border-[#0e6b47]/15 p-3">
           <p className="text-xs text-[#1a1410]">
-            <strong>Pastaba:</strong> jei nespėjai pažymėti prognozės iki rungtynių pradžios — gauni 0 tšk., bet tai nesutrukdo „serijos" skaičiuoti nuo kito match'o.
+            <strong>Pastaba:</strong> jei nespėjai pažymėti spėjimo iki rungtynių pradžios — gauni 0 tšk., bet tai nenutraukia „serijos" skaičiavimo nuo kitų rungtynių.
           </p>
         </div>
       </RuleSection>
@@ -1801,7 +1809,7 @@ const RulesScreen = () => {
       {/* Turnyro prognozės - taškai */}
       <RuleSection icon={Crown} title="Turnyro prognozės" color="#b8860b">
         <p className="text-xs text-[#6b6359] mb-3">
-          Vienkartiniai spėjimai prieš turnyro pradžią. Po pradžios <strong>nebegalima keisti</strong>.
+          Vienkartinės prognozės prieš turnyro pradžią. Prasidėjus turnyrui <strong>nebegalima keisti</strong>.
         </p>
         <div>
           <PointsRow
@@ -1813,29 +1821,29 @@ const RulesScreen = () => {
             label="Geriausias turnyro žaidėjas"
             points={15}
             color="#b8860b"
-            example="FIFA Golden Ball laimėtojas" />
+            example="FIFA „Auksinio kamuolio" laimėtojas" />
           <PointsRow
             label="Daugiausiai įvarčių įmušęs žaidėjas"
             points={15}
             color="#0e6b47"
-            example="FIFA Golden Boot laimėtojas" />
+            example="FIFA „Auksinės bato" laimėtojas" />
           <PointsRow
             label="Geriausias vartininkas"
             points={15}
             color="#0a2c4e"
-            example="FIFA Golden Glove laimėtojas" />
+            example="FIFA „Auksinės pirštinės" laimėtojas" />
           <PointsRow
-            label="Geriausias 21m. ar jaunesnis žaidėjas"
+            label="Geriausias 21 m. ar jaunesnis žaidėjas"
             points={15}
             color="#c8302e"
-            example="FIFA Young Player Award laimėtojas" />
+            example="FIFA geriausio jauno žaidėjo apdovanojimas" />
         </div>
         <div className="mt-3 rounded-lg bg-[#b8860b]/5 border border-[#b8860b]/15 p-3">
           <p className="text-xs text-[#1a1410]">
-            <strong>Maksimum iš turnyro prognozių:</strong> 25 + 4×15 = <span className="font-mono font-bold">85 tšk.</span>
+            <strong>Maksimumas už turnyro prognozes:</strong> 25 + 4×15 = <span className="font-mono font-bold">85 tšk.</span>
           </p>
           <p className="text-[11px] text-[#6b6359] mt-1">
-            Žaidėjų vardai lyginami case-insensitive ir ignoruoja tarpus (pvz., „MESSI", „messi", „Lionel Messi" — bus laikomi tuo pačiu, jei admin įvedė atitinkamai).
+            Žaidėjų vardai lyginami neatsižvelgiant į raidžių registrą ir tarpus (pvz., „MESSI", „messi", „Lionel Messi" — laikomi tuo pačiu, jei administratorius įvedė tinkamai).
           </p>
         </div>
       </RuleSection>
@@ -1844,43 +1852,43 @@ const RulesScreen = () => {
       <RuleSection icon={Lock} title="Spėjimų terminai" color="#c8302e">
         <div className="space-y-3">
           <div>
-            <div className="text-sm font-bold text-[#1a1410] mb-1">Rungtynių prognozės</div>
+            <div className="text-sm font-bold text-[#1a1410] mb-1">Rungtynių spėjimai</div>
             <p className="text-xs text-[#6b6359] leading-relaxed">
-              Galima keisti iki tos rungtynės pradžios laiko (kickoff). Vos rungtynė prasideda — prognozė užšaldoma. Tai patikrinama serveryje (Firestore Rules), tad apeiti nepavyks.
+              Galima keisti iki rungtynių pradžios. Vos rungtynės prasideda — spėjimas užšaldomas. Tai tikrinama serveryje, tad apeiti negalima.
             </p>
           </div>
           <div>
             <div className="text-sm font-bold text-[#1a1410] mb-1">Turnyro prognozės</div>
             <p className="text-xs text-[#6b6359] leading-relaxed">
-              Galima keisti iki <span className="font-mono font-bold text-[#1a1410]">2026-06-11 03:00 LT</span> (turnyro pradžios). Po šio momento — užšaldoma ir nebegalima keisti, net per API. Reikia spėti iki pirmos rungtynės dieną.
+              Galima keisti iki <span className="font-mono font-bold text-[#1a1410]">2026-06-11 03:00 LT</span> (turnyro pradžios). Po šio momento prognozės užšaldomos visam laikui. Spėti reikia iki turnyro atidarymo dienos.
             </p>
           </div>
         </div>
       </RuleSection>
 
-      {/* Serija (streak) */}
-      <RuleSection icon={Flame} title="Serija (streak)" color="#f5d27a">
+      {/* Serija */}
+      <RuleSection icon={Flame} title="Serija" color="#f5d27a">
         <p className="text-sm text-[#1a1410] leading-relaxed">
-          Serija — kelias iš eilės atspėtas rungtynes (bent 2 taškai už kiekvieną). Skaičiuojama atgal nuo paskutinės pasibaigusios rungtynės. Pirma 0 tšk. prognozė nutraukia seriją.
+          Serija — kelios iš eilės atspėtos rungtynės (bent 2 tšk. už kiekvienas). Skaičiuojama atgal nuo paskutinių pasibaigusių rungtynių. Pirmas 0 tšk. spėjimas nutraukia seriją.
         </p>
         <div className="mt-3 text-[11px] text-[#6b6359]">
-          <strong>Pavyzdys:</strong> jei trys paskutinės rungtynės davė tau 3, 2, 5 tšk., o ketvirtos atgal — 0 tšk., tavo serija = <span className="font-mono font-bold text-[#f5d27a]">3</span>.
+          <strong>Pavyzdys:</strong> jei trejos paskutinės rungtynės davė tau 3, 2, 5 tšk., o ketvirtos — 0 tšk., tavo serija lygi <span className="font-mono font-bold text-[#f5d27a]">3</span>.
         </div>
       </RuleSection>
 
-      {/* Lyderlentė */}
-      <RuleSection icon={BarChart3} title="Lyderlentė" color="#0a2c4e">
+      {/* Lyderių lentelė */}
+      <RuleSection icon={BarChart3} title="Lyderių lentelė" color="#0a2c4e">
         <div className="space-y-3">
           <div>
-            <div className="text-sm font-bold text-[#1a1410] mb-1">Bendra — pagal individualius taškus</div>
+            <div className="text-sm font-bold text-[#1a1410] mb-1">Bendra — pagal asmeninius taškus</div>
             <p className="text-xs text-[#6b6359]">
-              Bendros sumos rikiuojamos mažėjančia tvarka. Iš viso = rungtynių taškai + turnyro prognozių taškai.
+              Bendros sumos rikiuojamos mažėjimo tvarka. Iš viso = rungtynių taškai + turnyro prognozių taškai.
             </p>
           </div>
           <div>
             <div className="text-sm font-bold text-[#1a1410] mb-1">Įmonės — pagal vidurkį vienam dalyviui</div>
             <p className="text-xs text-[#6b6359]">
-              Sumuojami visi įmonės dalyvių taškai ir dalinami iš dalyvių skaičiaus. Taip mažos įmonės sąžiningai konkuruoja su didelėmis — kolektyvinis dydis nesuteikia pranašumo.
+              Sudedami visų įmonės dalyvių taškai ir dalijami iš dalyvių skaičiaus. Taip mažos įmonės sąžiningai varžosi su didelėmis — kolektyvo dydis nesuteikia pranašumo.
             </p>
           </div>
         </div>
@@ -1889,39 +1897,39 @@ const RulesScreen = () => {
       {/* Grupių etapas */}
       <RuleSection icon={Shield} title="Grupių etapas" color="#0e6b47">
         <p className="text-sm text-[#1a1410] leading-relaxed mb-3">
-          12 grupių (A–L) po 4 komandas, kiekviena žaidžia su kitomis (3 rungtynės per komandą = 72 grupių rungtynės).
+          12 grupių (A–L) po 4 komandas, kiekviena žaidžia su kitomis grupės narėmis (3 rungtynės kiekvienai komandai = iš viso 72 grupių etapo rungtynės).
         </p>
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
             <span className="w-2 h-3 rounded-full bg-[#0e6b47]" />
-            <span className="text-[#1a1410]"><strong>1-2 vieta</strong> — tiesiogiai į knockout etapą (1/16 finalo)</span>
+            <span className="text-[#1a1410]"><strong>1-2 vieta</strong> — tiesiogiai į atkrintamųjų varžybų etapą (1/16 finalo)</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-3 rounded-full bg-[#b8860b]" />
-            <span className="text-[#1a1410]"><strong>3 vieta</strong> — 8 geriausi (iš 12) taip pat patenka į knockout</span>
+            <span className="text-[#1a1410]"><strong>3 vieta</strong> — 8 geriausios (iš 12) taip pat patenka į atkrintamąsias</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-3 rounded-full bg-[#9d9489]" />
-            <span className="text-[#1a1410]"><strong>4 vieta</strong> — eliminuotos</span>
+            <span className="text-[#1a1410]"><strong>4 vieta</strong> — iškrenta iš turnyro</span>
           </div>
         </div>
         <div className="mt-3 rounded-lg bg-[#0e6b47]/5 border border-[#0e6b47]/15 p-3">
-          <div className="text-[11px] font-bold text-[#1a1410] uppercase tracking-wider mb-1">Rūšiavimo tvarka (tiebreakers)</div>
+          <div className="text-[11px] font-bold text-[#1a1410] uppercase tracking-wider mb-1">Rikiavimo tvarka</div>
           <ol className="text-[11px] text-[#6b6359] space-y-0.5 ml-4 list-decimal">
             <li>Taškai (3 už pergalę, 1 už lygiąsias)</li>
-            <li>Gol skirtumas (įmušti − praleisti)</li>
+            <li>Įvarčių skirtumas (įmušti − praleisti)</li>
             <li>Įmušti įvarčiai</li>
           </ol>
           <p className="text-[10px] text-[#6b6359] mt-2 italic">
-            Pastaba: FIFA naudoja papildomus kriterijus (tarpusavio rungtynės, fair-play taškai, burtai), bet retais atvejais — mūsų app'as parodo paprastesnę versiją.
+            Pastaba: FIFA naudoja papildomus kriterijus (tarpusavio rungtynės, drausmės taškai, burtai), bet retais atvejais — ši aplikacija rodo paprastesnę versiją.
           </p>
         </div>
       </RuleSection>
 
-      {/* Knockout etapas */}
-      <RuleSection icon={Award} title="Knockout etapas" color="#0a2c4e">
+      {/* Atkrintamųjų varžybų etapas */}
+      <RuleSection icon={Award} title="Atkrintamųjų varžybų etapas" color="#0a2c4e">
         <p className="text-sm text-[#1a1410] leading-relaxed mb-3">
-          32 komandos atkrenta vienos su kitomis. Lygiosios reglamentinio laiko gale → pratęsimas → baudinukų serija.
+          32 komandos atkrenta vienos su kitomis. Lygiosios pagrindinio laiko pabaigoje → pratęsimas → 11 m. baudinių serija.
         </p>
         <div className="grid grid-cols-2 gap-2 text-xs">
           {[
@@ -1934,32 +1942,20 @@ const RulesScreen = () => {
           ].map((s) => (
             <div key={s.stage} className="rounded-lg bg-[#0a2c4e]/5 px-3 py-2">
               <div className="font-bold text-[#1a1410]">{s.stage}</div>
-              <div className="text-[10px] text-[#6b6359]">{s.matches} {pluralizeLt(s.matches, ['rungtynė', 'rungtynės', 'rungtynių'])}</div>
+              <div className="text-[10px] text-[#6b6359]">{s.matches} {pluralizeLt(s.matches, ['rungtynės', 'rungtynės', 'rungtynių'])}</div>
               <div className="text-[10px] text-[#6b6359]">{s.dates}</div>
             </div>
           ))}
         </div>
         <p className="text-[11px] text-[#6b6359] mt-3">
-          Spėjimai veikia ta pati logika kaip ir grupių etape (5/3/2 tšk.). Po baudinukų serijos rezultatas užfiksuojamas pagal reglamentinį laiką (paprastai 1:1, 2:2 ir t.t.), nebent FIFA reglamentas keičia interpretaciją.
+          Spėjimams galioja ta pati skaičiavimo logika kaip ir grupių etape (5/3/2 tšk.). Po 11 m. baudinių serijos rezultatas fiksuojamas pagal pagrindinio laiko pabaigą (paprastai 1:1, 2:2 ir pan.).
         </p>
-      </RuleSection>
-
-      {/* Saugumas */}
-      <RuleSection icon={Lock} title="Saugumas ir privatumas" color="#6b6359">
-        <ul className="space-y-2 text-xs text-[#1a1410]">
-          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Slaptažodžiai saugomi Firebase Authentication (bcrypt hash)</li>
-          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Visi duomenys siunčiami per HTTPS</li>
-          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Negali matyti svetimų prognozių iki rungtynių pradžios</li>
-          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Negali keisti svetimų prognozių, taškų ar profilio</li>
-          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Admin teises gali suteikti tik kitas admin'as (per app) arba Firebase Console</li>
-          <li className="flex gap-2"><span className="text-[#0e6b47] font-bold">✓</span>Server-side patikrinimai užkerta visus apeiti per API call'ą</li>
-        </ul>
       </RuleSection>
 
       {/* Kontaktas / klausimai */}
       <RuleSection icon={AlertCircle} title="Klausimai?" color="#b8860b">
         <p className="text-sm text-[#1a1410] leading-relaxed">
-          Jei radai bug'ą, kažko trūksta arba reikia daugiau funkcijų — susisiek su admin'u. Šis pulas vidinis, todėl visi atnaujinimai daromi pagal dalyvių pasiūlymus.
+          Jei radai klaidą, ko nors trūksta arba reikia daugiau funkcijų — susisiek su administratoriumi. Šis totalizatorius yra vidinis, todėl visi atnaujinimai daromi pagal dalyvių pasiūlymus.
         </p>
       </RuleSection>
     </div>
@@ -2166,7 +2162,7 @@ const GroupsScreen = ({ matches }) => {
       <div className="card-light rounded-xl p-3 flex flex-wrap items-center gap-4 text-[11px]">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-3 rounded-full bg-[#0e6b47]" />
-          <span className="text-[#1a1410]">1-2 vieta — į knockout</span>
+          <span className="text-[#1a1410]">1-2 vieta — į atkrintamąsias</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-3 rounded-full bg-[#b8860b]" />
@@ -2239,8 +2235,8 @@ const KNOCKOUT_PLACEHOLDERS = {
 };
 
 const getPlaceholder = (match, side) => {
-  // Pirma bandyti pagal match ID, fallback į TBD
-  return KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'TBD';
+  // Pirma bandyti pagal match ID, fallback į "Paaiškės"
+  return KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'Paaiškės';
 };
 
 // Mini match cell bracket'ui (kompaktiškas, su prognozės input'u)
@@ -2371,13 +2367,13 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
     return (
       <div className="space-y-4 pb-24 lg:pb-8">
         <div>
-          <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">KNOCKOUT</h1>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">ATKRITIMO ETAPAS</h1>
           <p className="text-sm text-[#6b6359]">1/16 finalas · Aštuntfinalis · ... · Finalas</p>
         </div>
         <div className="card-light rounded-xl p-6 text-center">
           <AlertCircle className="w-8 h-8 text-[#b8860b] mx-auto mb-2" />
-          <p className="text-sm text-[#1a1410] font-semibold mb-1">Knockout etapas dar nesukurtas</p>
-          <p className="text-xs text-[#6b6359]">Administratorius gali sukurti struktūrą admin skydelyje.</p>
+          <p className="text-sm text-[#1a1410] font-semibold mb-1">Atkrintamųjų varžybų etapas dar nesukurtas</p>
+          <p className="text-xs text-[#6b6359]">Administratorius gali sukurti struktūrą administratoriaus skydelyje.</p>
         </div>
       </div>
     );
@@ -2386,7 +2382,7 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">KNOCKOUT</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">ATKRITIMO ETAPAS</h1>
         <p className="text-sm text-[#6b6359]">{knockoutMatches.length} rungtynių · spėk visus etapus</p>
       </div>
 
@@ -2654,15 +2650,15 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
 
   const handleMigrate = async () => {
     const ok = await confirm({
-      title: 'Migruoti vartotojų privatumus',
-      message: `Bus perkelti ${usersNeedingMigration} vartotojų email ir fullName iš public dokumentų į privačius (users_private). Po šito jų email matys tik patys vartotojai ir admin'ai. Veiksmas negrįžtamas.`,
+      title: 'Perkelti vartotojų privačius duomenis',
+      message: `Bus perkelti ${usersNeedingMigration} vartotojų el. paštas ir vardas/pavardė iš viešų dokumentų į privačius (users_private). Po šio veiksmo el. paštą matys tik patys vartotojai ir administratoriai. Veiksmas negrįžtamas.`,
       confirmLabel: 'Migruoti',
     });
     if (!ok) return;
     setMigrating(true);
     try {
       const count = await migrateUsersToPrivateSchema();
-      await notify({ title: 'Pavyko', message: `Migruota ${count} vartotojų. Privatūs duomenys dabar slepiami nuo kitų.` });
+      await notify({ title: 'Pavyko', message: `Perkelta ${count} vartotojų. Privatūs duomenys dabar slepiami nuo kitų.` });
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
@@ -2674,8 +2670,8 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
     const willBeAdmin = !user.isAdmin;
     if (user.uid === currentUid && !willBeAdmin) {
       const ok = await confirm({
-        title: 'Atimti sau admin teises?',
-        message: "Po šio veiksmo nebematysi admin panelės. Atstatyti gali tik kitas admin'as arba Firebase Console.",
+        title: 'Atimti sau administratoriaus teises?',
+        message: "Po šio veiksmo nebematysi administratoriaus skydelio. Atstatyti gali tik kitas administratorius arba Firebase Console.",
         confirmLabel: 'Atimti',
         variant: 'danger',
       });
@@ -2715,10 +2711,10 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
           <div className="flex items-start gap-2 mb-3">
             <AlertCircle className="w-4 h-4 text-[#b8860b] flex-shrink-0 mt-0.5" />
             <div className="text-xs text-[#1a1410]">
-              <div className="font-bold mb-1">{usersNeedingMigration} vartotojų turi senos schemos PII duomenis</div>
+              <div className="font-bold mb-1">{usersNeedingMigration} vartotojų turi senos struktūros asmeninius duomenis</div>
               <p className="text-[11px] text-[#6b6359]">
-                Jų email ir vardas pavardė yra public dokumentuose ir gali būti matomi kitiems prisijungusiems
-                vartotojams per DevTools. Paspausk mygtuką žemiau, kad perkeltum juos į privačius dokumentus.
+                Jų el. paštas ir vardas/pavardė yra viešuose dokumentuose ir gali būti matomi kitiems prisijungusiems
+                vartotojams per naršyklės įrankius. Paspausk mygtuką, kad perkeltum juos į privačius dokumentus.
               </p>
             </div>
           </div>
@@ -2726,7 +2722,7 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
             style={{ backgroundColor: '#b8860b', color: '#ffffff' }}
             className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2">
             {migrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Migruoti privatumo duomenis ({usersNeedingMigration})
+            Perkelti privačius duomenis ({usersNeedingMigration})
           </button>
         </div>
       )}
@@ -2788,7 +2784,7 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
                       : { backgroundColor: '#0a2c4e', color: '#ffffff' }}
                     className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
                     {isBusy && <Loader2 className="w-3 h-3 animate-spin" />}
-                    {u.isAdmin ? 'Atimti admin' : 'Suteikti admin'}
+                    {u.isAdmin ? 'Atimti teises' : 'Suteikti teises'}
                   </button>
                 </div>
               </div>
@@ -2883,7 +2879,7 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
     <div className="space-y-3">
       <div className="card-light rounded-xl p-4 bg-[#0a2c4e]/5 border-[#0a2c4e]/20">
         <p className="text-xs text-[#1a1410]">
-          <strong>Pastaba:</strong> įvedus realius laimėtojus, visiems dalyviams automatiškai pridedami taškai už atitinkančias prognozes. Vardai lyginami case-insensitive (tarpai/raidžių registras nesvarbu). Tikrink vardus prieš įrašydamas.
+          <strong>Pastaba:</strong> įvedus tikrus laimėtojus, visiems dalyviams automatiškai pridedami taškai už atitinkančias prognozes. Vardai lyginami neatsižvelgiant į raidžių registrą ir tarpus. Patikrink vardus prieš įrašydamas.
         </p>
       </div>
 
@@ -2955,15 +2951,15 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
 
   const handleSeed = async () => {
     const ok = await confirm({
-      title: 'Sukurti demo rungtynes',
-      message: 'Bus sukurtos 8 demo rungtynės. Esami m1-m8 dokumentai bus perrašyti.',
+      title: 'Sukurti testines rungtynes',
+      message: 'Bus sukurtos 8 testinės rungtynės. Esami m1-m8 dokumentai bus perrašyti.',
       confirmLabel: 'Sukurti',
     });
     if (!ok) return;
     setSeeding(true);
     try {
       await seedDemoMatches();
-      await notify({ title: 'Pavyko', message: 'Demo rungtynės sukurtos!' });
+      await notify({ title: 'Pavyko', message: 'Testinės rungtynės sukurtos.' });
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
@@ -2991,8 +2987,8 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
 
   const handleDeleteDemo = async () => {
     const ok = await confirm({
-      title: 'Ištrinti demo rungtynes',
-      message: 'Bus ištrintos visos 8 demo rungtynės (m1-m8). Tai nepalies tikrų PFČ 2026 rungtynių (g01-g72).',
+      title: 'Ištrinti testines rungtynes',
+      message: 'Bus ištrintos visos 8 testinės rungtynės (m1-m8). Tai nepalies tikrų PFČ 2026 rungtynių (g01-g72).',
       confirmLabel: 'Ištrinti',
       variant: 'danger',
     });
@@ -3000,7 +2996,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
     setSeeding(true);
     try {
       await deleteDemoMatches();
-      await notify({ title: 'Pavyko', message: 'Demo rungtynės ištrintos.' });
+      await notify({ title: 'Pavyko', message: 'Testinės rungtynės ištrintos.' });
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
@@ -3010,15 +3006,15 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
 
   const handleSeedKnockout = async () => {
     const ok = await confirm({
-      title: 'Sukurti knockout struktūrą',
-      message: 'Bus sukurti 32 tušti knockout etapo match\'ai (k01-k32) be priskirtų komandų. Komandas priskirsi rankiniu būdu (per "Redaguoti") po grupių etapo, arba API sync užpildys automatiškai. Esami k01-k32 dokumentai bus perrašyti.',
+      title: 'Sukurti atkrintamųjų varžybų etapo struktūrą',
+      message: 'Bus sukurtos 32 tuščios atkrintamųjų varžybų etapo rungtynės (k01-k32) be priskirtų komandų. Komandas priskirsi rankiniu būdu (per „Redaguoti") po grupių etapo arba jas automatiškai užpildys sinchronizacija iš API. Esami k01-k32 dokumentai bus perrašyti.',
       confirmLabel: 'Sukurti',
     });
     if (!ok) return;
     setSeeding(true);
     try {
       const count = await seedKnockoutStructure();
-      await notify({ title: 'Pavyko', message: `Sukurti ${count} knockout etapo placeholder'iai.` });
+      await notify({ title: 'Pavyko', message: `Sukurti ${count} atkrintamųjų varžybų rungtynių ruošiniai.` });
     } catch (err) {
       await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
@@ -3035,14 +3031,14 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         `Suderinta: ${stats.matched}\n` +
         `Atnaujinta: ${stats.updated}\n`;
       if (stats.created > 0) {
-        msg += `Sukurta naujų (knockout): ${stats.created}\n`;
+        msg += `Sukurta naujų (atkrintamųjų): ${stats.created}\n`;
       }
       msg += `Be pakeitimų: ${stats.skipped}`;
       if (stats.unmatched.length > 0) {
         const shown = stats.unmatched.slice(0, 5).join('\n  • ');
         msg += `\n\nNepriderinta (${stats.unmatched.length}):\n  • ${shown}`;
         if (stats.unmatched.length > 5) msg += `\n  • ... ir dar ${stats.unmatched.length - 5}`;
-        msg += `\n\n(Knockout etapo rungtynės be komandų - laukia grupių rezultatų)`;
+        msg += `\n\n(Atkrintamųjų etapo rungtynės be komandų — laukia grupių rezultatų)`;
       }
       await notify({ title: 'Sinchronizacija baigta', message: msg });
     } catch (err) {
@@ -3099,7 +3095,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
     matches: 'Rungtynių valdymas',
     results: 'Turnyro laimėtojai (čempionas, žaidėjai)',
     companies: 'Įmonių sąrašas ir dalyvių paskirstymas',
-    users: 'Vartotojai, admin teisės, įmonių keitimas',
+    users: 'Vartotojai, administratoriaus teisės, įmonių keitimas',
   }[tab];
 
   return (
@@ -3139,7 +3135,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
             <Radio className="w-4 h-4 text-[#0e6b47]" />
             Rezultatų sinchronizacija
           </div>
-          <p className="text-[11px] text-[#6b6359]">Paspausk po kiekvieno match dieną - automatiškai atnaujina baigtas/vykstančias rungtynes iš oficialaus FIFA tiekėjo (football-data.org).</p>
+          <p className="text-[11px] text-[#6b6359]">Paspausk po kiekvienos rungtynių dienos — automatiškai atnaujins baigtas ar vykstančias rungtynes iš oficialaus FIFA duomenų tiekėjo (football-data.org).</p>
         </div>
 
         <button onClick={handleSyncFromAPI} disabled={seeding}
@@ -3150,7 +3146,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         </button>
 
         <p className="text-[10px] text-[#6b6359]">
-          💡 Jei API neveikia - rankiniu būdu žemiau gali bet kada įvesti rezultatą.
+          💡 Jei API neveikia, žemiau bet kada gali įvesti rezultatą rankiniu būdu.
         </p>
       </div>
 
@@ -3158,7 +3154,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
       <div className="card-light rounded-xl p-4 space-y-3">
         <div>
           <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-1">Rungtynių valdymas</div>
-          <p className="text-[11px] text-[#6b6359]">Tikros oficialios PFČ 2026 rungtynės - 72 grupių etapas. Knockout etapas pridedamas rankiniu būdu po grupių.</p>
+          <p className="text-[11px] text-[#6b6359]">Tikros oficialios PFČ 2026 rungtynės - 72 grupių etapo rungtynės. Atkrintamųjų varžybų etapas pridedamas rankiniu būdu po grupių.</p>
         </div>
 
         <button onClick={handleSeedWC2026} disabled={seeding}
@@ -3172,19 +3168,19 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
           style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
           className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
           {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
-          Sukurti knockout struktūrą (32)
+          Sukurti atkrintamųjų etapą (32)
         </button>
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSeed} disabled={seeding}
             style={{ backgroundColor: '#6b6359', color: '#ffffff' }}
             className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
-            Sukurti 8 demo
+            Sukurti 8 testines
           </button>
           <button onClick={handleDeleteDemo} disabled={seeding}
             style={{ backgroundColor: '#c8302e', color: '#ffffff' }}
             className="py-2 rounded-lg font-display uppercase tracking-wider text-[10px] disabled:opacity-50 flex items-center justify-center gap-1">
-            Ištrinti demo
+            Ištrinti testines
           </button>
         </div>
       </div>
@@ -3203,11 +3199,11 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
               <div className="flex items-center gap-2 min-w-0">
                 <Flag code={teamsByCode[m.home]?.code} className="w-6 h-4" />
                 <span className="text-xs font-bold truncate">
-                  {teamsByCode[m.home]?.name || <span className="text-[#9d9489]">TBD</span>}
+                  {teamsByCode[m.home]?.name || <span className="text-[#9d9489]">Paaiškės</span>}
                 </span>
                 <span className="text-[#9d9489] text-xs">vs</span>
                 <span className="text-xs font-bold truncate">
-                  {teamsByCode[m.away]?.name || <span className="text-[#9d9489]">TBD</span>}
+                  {teamsByCode[m.away]?.name || <span className="text-[#9d9489]">Paaiškės</span>}
                 </span>
                 <Flag code={teamsByCode[m.away]?.code} className="w-6 h-4" />
               </div>
@@ -3231,7 +3227,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
                       <select value={editForm.homeTeam}
                         onChange={(e) => setEditForm({ ...editForm, homeTeam: e.target.value })}
                         className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white">
-                        <option value="">— TBD —</option>
+                        <option value="">— Paaiškės —</option>
                         {Object.keys(teamsByCode).sort((a, b) => teamsByCode[a].name.localeCompare(teamsByCode[b].name, 'lt')).map((code) => (
                           <option key={code} value={code}>{teamsByCode[code].name}</option>
                         ))}
@@ -3242,7 +3238,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
                       <select value={editForm.awayTeam}
                         onChange={(e) => setEditForm({ ...editForm, awayTeam: e.target.value })}
                         className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white">
-                        <option value="">— TBD —</option>
+                        <option value="">— Paaiškės —</option>
                         {Object.keys(teamsByCode).sort((a, b) => teamsByCode[a].name.localeCompare(teamsByCode[b].name, 'lt')).map((code) => (
                           <option key={code} value={code}>{teamsByCode[code].name}</option>
                         ))}
@@ -3262,7 +3258,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
                 <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                   className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-sm">
                   <option value="upcoming">Būsima</option>
-                  <option value="live">Vyksta (live)</option>
+                  <option value="live">Vyksta tiesiogiai</option>
                   <option value="finished">Baigta</option>
                 </select>
                 <div className="flex gap-2">
@@ -3476,7 +3472,7 @@ export default function App() {
     { id: 'home', icon: Home, label: 'Pradžia' },
     { id: 'matches', icon: Calendar, label: 'Rungtynės' },
     { id: 'groups', icon: Shield, label: 'Grupės' },
-    { id: 'bracket', icon: Award, label: 'Bracket' },
+    { id: 'bracket', icon: Award, label: 'Atkritimas' },
     { id: 'tournament', icon: Trophy, label: 'Prognozės' },
     { id: 'leaderboard', icon: BarChart3, label: 'Lyderiai' },
     { id: 'rules', icon: BookOpen, label: 'Taisyklės' },
