@@ -6,6 +6,7 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  deleteUser,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -19,6 +20,9 @@ import {
   serverTimestamp,
   writeBatch,
   getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 
 // === FIREBASE CONFIG ===
@@ -36,6 +40,10 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+// Turnyro pradžios timestamp - po šio momento tournamentBets nebegalima keisti.
+// Turi sutapti su firestore.rules patikra (timestamp.date(2026, 6, 11) = 2026-06-11 00:00 UTC).
+export const TOURNAMENT_LOCK_TIME = new Date('2026-06-11T00:00:00Z').getTime();
+
 // === AUTH HELPERS ===
 
 // Spalvų paletė vartotojo avatarui
@@ -48,26 +56,37 @@ export async function registerUser(email, password, username, fullName, companyI
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const uid = cred.user.uid;
 
-  const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
-  const avatarLetter = (fullName || username).trim()[0].toUpperCase();
+  // Jei profilio sukūrimas (updateProfile arba setDoc) nepavyks, ištrinti auth user'į,
+  // kad neliktų "orphan" Auth įrašo be Firestore profilio (kuris vėliau sukeltų infinite loading).
+  try {
+    const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+    const avatarLetter = (fullName || username).trim()[0].toUpperCase();
 
-  await updateProfile(cred.user, { displayName: username });
+    await updateProfile(cred.user, { displayName: username });
 
-  // Sukurti vartotojo profilį Firestore
-  await setDoc(doc(db, 'users', uid), {
-    uid,
-    email,
-    username,
-    fullName,
-    avatarLetter,
-    avatarColor,
-    companyId: companyId || null, // null = "Be įmonės"
-    companyName: companyName || null,
-    isAdmin: false, // Admin teises galima suteikti tik per Firebase Console
-    createdAt: serverTimestamp(),
-  });
+    await setDoc(doc(db, 'users', uid), {
+      uid,
+      email,
+      username,
+      fullName,
+      avatarLetter,
+      avatarColor,
+      companyId: companyId || null, // null = "Be įmonės"
+      companyName: companyName || null,
+      isAdmin: false, // Admin teises galima suteikti tik per Firebase Console
+      createdAt: serverTimestamp(),
+    });
 
-  return cred.user;
+    return cred.user;
+  } catch (err) {
+    // Rollback: pašalinti dalinai sukurtą auth user'į
+    try {
+      await deleteUser(cred.user);
+    } catch (_) {
+      // Jei rollback'as nepavyko (pvz., reikia reauth), tylim - originali klaida svarbesnė
+    }
+    throw err;
+  }
 }
 
 export function loginUser(email, password) {
@@ -99,6 +118,27 @@ export function savePrediction(uid, matchId, home, away) {
     home,
     away,
     submittedAt: serverTimestamp(),
+  });
+}
+
+// === TOURNAMENT RESULTS (admin) ===
+
+const RESULTS_DOC_ID = 'wc2026';
+
+export function saveTournamentResults(data) {
+  return setDoc(doc(db, 'tournamentResults', RESULTS_DOC_ID), {
+    champion: data.champion || null,
+    bestPlayer: (data.bestPlayer || '').trim(),
+    topScorer: (data.topScorer || '').trim(),
+    bestGoalkeeper: (data.bestGoalkeeper || '').trim(),
+    bestYoungPlayer: (data.bestYoungPlayer || '').trim(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export function listenToTournamentResults(callback) {
+  return onSnapshot(doc(db, 'tournamentResults', RESULTS_DOC_ID), (snap) => {
+    callback(snap.exists() ? snap.data() : null);
   });
 }
 
@@ -171,22 +211,84 @@ export function listenToCompanies(callback) {
   });
 }
 
+// Visų tournamentBets listener'is - reikalingas taškų skaičiavimui per visus dalyvius
+export function listenToAllTournamentBets(callback) {
+  return onSnapshot(collection(db, 'tournamentBets'), (snap) => {
+    const bets = [];
+    snap.forEach((d) => bets.push({ id: d.id, ...d.data() }));
+    callback(bets);
+  });
+}
+
 // === ADMIN FUNCTIONS ===
 
 export function updateMatch(matchId, updates) {
   return setDoc(doc(db, 'matches', matchId), updates, { merge: true });
 }
 
+// === COMPANIES (admin) ===
+
+export async function createCompany(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) throw new Error('Įmonės pavadinimas negali būti tuščias');
+  const ref = await addDoc(collection(db, 'companies'), {
+    name: trimmed,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function updateCompany(companyId, name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) throw new Error('Įmonės pavadinimas negali būti tuščias');
+  await updateDoc(doc(db, 'companies', companyId), { name: trimmed });
+
+  // Sinchronizuoti companyName visiems šios įmonės vartotojams
+  const q = query(collection(db, 'users'), where('companyId', '==', companyId));
+  const snap = await getDocs(q);
+  if (!snap.empty) {
+    const batch = writeBatch(db);
+    snap.forEach((u) => batch.update(doc(db, 'users', u.id), { companyName: trimmed }));
+    await batch.commit();
+  }
+}
+
+// Ištrinti įmonę galima tik jei joje nėra vartotojų.
+export async function deleteCompany(companyId) {
+  const q = query(collection(db, 'users'), where('companyId', '==', companyId));
+  const snap = await getDocs(q);
+  if (!snap.empty) {
+    throw new Error(`Negalima ištrinti - įmonė turi ${snap.size} dalyvių. Pirma juos perskirk.`);
+  }
+  await deleteDoc(doc(db, 'companies', companyId));
+}
+
+// === USER ADMIN TEISĖS ===
+
+export function setUserAdmin(uid, isAdmin) {
+  return updateDoc(doc(db, 'users', uid), { isAdmin: Boolean(isAdmin) });
+}
+
+// Pakeisti vartotojo įmonę (perskirti į kitą arba pašalinti)
+export function setUserCompany(uid, companyId, companyName) {
+  return updateDoc(doc(db, 'users', uid), {
+    companyId: companyId || null,
+    companyName: companyName || null,
+  });
+}
+
 export async function seedDemoMatches() {
+  // 8 demo rungtynės - po vieną iš skirtingų grupių, su teisingomis PFČ 2026 komandomis.
+  // Naudoti testavimui prieš įkeliant visas 72 tikras rungtynes.
   const matches = [
-    { id: 'm1', home: 'MEX', away: 'POR', kickoff: '2026-06-11T20:00:00Z', stage: 'group', group: 'A', status: 'upcoming', actualScore: null },
-    { id: 'm2', home: 'CAN', away: 'KOR', kickoff: '2026-06-12T18:00:00Z', stage: 'group', group: 'A', status: 'upcoming', actualScore: null },
-    { id: 'm3', home: 'USA', away: 'ESP', kickoff: '2026-06-12T20:00:00Z', stage: 'group', group: 'B', status: 'upcoming', actualScore: null },
-    { id: 'm4', home: 'GER', away: 'JPN', kickoff: '2026-06-13T16:00:00Z', stage: 'group', group: 'B', status: 'upcoming', actualScore: null },
-    { id: 'm5', home: 'BRA', away: 'CRO', kickoff: '2026-06-13T19:00:00Z', stage: 'group', group: 'C', status: 'upcoming', actualScore: null },
-    { id: 'm6', home: 'CRO', away: 'NED', kickoff: '2026-06-14T18:00:00Z', stage: 'group', group: 'C', status: 'upcoming', actualScore: null },
-    { id: 'm7', home: 'ARG', away: 'FRA', kickoff: '2026-06-14T21:00:00Z', stage: 'group', group: 'D', status: 'upcoming', actualScore: null },
-    { id: 'm8', home: 'ENG', away: 'BEL', kickoff: '2026-06-15T17:00:00Z', stage: 'group', group: 'D', status: 'upcoming', actualScore: null },
+    { id: 'm1', home: 'MEX', away: 'RSA', kickoff: '2026-06-11T20:00:00Z', stage: 'group', group: 'A', status: 'upcoming', actualScore: null },
+    { id: 'm2', home: 'CAN', away: 'BIH', kickoff: '2026-06-12T18:00:00Z', stage: 'group', group: 'B', status: 'upcoming', actualScore: null },
+    { id: 'm3', home: 'BRA', away: 'MAR', kickoff: '2026-06-12T20:00:00Z', stage: 'group', group: 'C', status: 'upcoming', actualScore: null },
+    { id: 'm4', home: 'USA', away: 'PAR', kickoff: '2026-06-13T16:00:00Z', stage: 'group', group: 'D', status: 'upcoming', actualScore: null },
+    { id: 'm5', home: 'GER', away: 'CUW', kickoff: '2026-06-13T19:00:00Z', stage: 'group', group: 'E', status: 'upcoming', actualScore: null },
+    { id: 'm6', home: 'NED', away: 'JPN', kickoff: '2026-06-14T18:00:00Z', stage: 'group', group: 'F', status: 'upcoming', actualScore: null },
+    { id: 'm7', home: 'ARG', away: 'ALG', kickoff: '2026-06-14T21:00:00Z', stage: 'group', group: 'J', status: 'upcoming', actualScore: null },
+    { id: 'm8', home: 'ENG', away: 'CRO', kickoff: '2026-06-15T17:00:00Z', stage: 'group', group: 'L', status: 'upcoming', actualScore: null },
   ];
 
   const batch = writeBatch(db);
@@ -318,6 +420,74 @@ export async function deleteDemoMatches() {
   await batch.commit();
 }
 
+// === PFČ 2026 KNOCKOUT ETAPO STRUKTŪRA ===
+// 32 match'ai (16 R32 + 8 R16 + 4 ¼ + 2 ½ + 1 dėl 3 vietos + 1 finalas).
+// Komandos null - admin'as priskirs po grupių etapo, arba API sync užpildys.
+// Datos pagal oficialų FIFA tvarkaraštį (UTC).
+export async function seedKnockoutStructure() {
+  const make = (id, kickoff, stage) => ({
+    id, home: null, away: null, kickoff, stage, group: null, status: 'upcoming', actualScore: null,
+  });
+  const matches = [
+    // Round of 32 (k01-k16): 2026-06-28 → 2026-07-03
+    make('k01', '2026-06-28T16:00:00Z', 'round_of_32'),
+    make('k02', '2026-06-28T20:00:00Z', 'round_of_32'),
+    make('k03', '2026-06-29T16:00:00Z', 'round_of_32'),
+    make('k04', '2026-06-29T20:00:00Z', 'round_of_32'),
+    make('k05', '2026-06-30T16:00:00Z', 'round_of_32'),
+    make('k06', '2026-06-30T20:00:00Z', 'round_of_32'),
+    make('k07', '2026-07-01T16:00:00Z', 'round_of_32'),
+    make('k08', '2026-07-01T20:00:00Z', 'round_of_32'),
+    make('k09', '2026-07-01T23:00:00Z', 'round_of_32'),
+    make('k10', '2026-07-02T16:00:00Z', 'round_of_32'),
+    make('k11', '2026-07-02T20:00:00Z', 'round_of_32'),
+    make('k12', '2026-07-02T23:00:00Z', 'round_of_32'),
+    make('k13', '2026-07-03T16:00:00Z', 'round_of_32'),
+    make('k14', '2026-07-03T20:00:00Z', 'round_of_32'),
+    make('k15', '2026-07-03T23:00:00Z', 'round_of_32'),
+    make('k16', '2026-07-03T23:00:00Z', 'round_of_32'),
+
+    // Round of 16 (k17-k24): 2026-07-04 → 2026-07-07
+    make('k17', '2026-07-04T16:00:00Z', 'round_of_16'),
+    make('k18', '2026-07-04T20:00:00Z', 'round_of_16'),
+    make('k19', '2026-07-05T16:00:00Z', 'round_of_16'),
+    make('k20', '2026-07-05T20:00:00Z', 'round_of_16'),
+    make('k21', '2026-07-06T16:00:00Z', 'round_of_16'),
+    make('k22', '2026-07-06T20:00:00Z', 'round_of_16'),
+    make('k23', '2026-07-07T16:00:00Z', 'round_of_16'),
+    make('k24', '2026-07-07T20:00:00Z', 'round_of_16'),
+
+    // Quarter finals (k25-k28): 2026-07-09 → 2026-07-11
+    make('k25', '2026-07-09T20:00:00Z', 'quarter_final'),
+    make('k26', '2026-07-10T20:00:00Z', 'quarter_final'),
+    make('k27', '2026-07-11T16:00:00Z', 'quarter_final'),
+    make('k28', '2026-07-11T20:00:00Z', 'quarter_final'),
+
+    // Semi finals (k29-k30): 2026-07-14 → 2026-07-15
+    make('k29', '2026-07-14T20:00:00Z', 'semi_final'),
+    make('k30', '2026-07-15T20:00:00Z', 'semi_final'),
+
+    // 3rd place playoff (k31): 2026-07-18
+    make('k31', '2026-07-18T16:00:00Z', 'third_place'),
+
+    // Final (k32): 2026-07-19
+    make('k32', '2026-07-19T19:00:00Z', 'final'),
+  ];
+
+  const batch = writeBatch(db);
+  matches.forEach((m) => batch.set(doc(db, 'matches', m.id), m));
+  await batch.commit();
+  return matches.length;
+}
+
+// Atnaujinti knockout match'o komandas (admin po grupių etapo pabaigos)
+export function setKnockoutTeams(matchId, home, away) {
+  return updateDoc(doc(db, 'matches', matchId), {
+    home: home || null,
+    away: away || null,
+  });
+}
+
 // === REZULTATŲ SINCHRONIZAVIMAS IŠ FOOTBALL-DATA.ORG API ===
 // API teikia oficialius PFČ rezultatus realiu laiku
 // Free tier: 10 užklausų/min - pakanka draugų app'ui
@@ -398,21 +568,25 @@ const API_NAME_TO_CODE = {
   'Panama': 'PAN',
 };
 
-// Pirma bandome pagal TLA (3 raidžių kodą - API'oje "tla" laukas), jei nepadeda - pagal pavadinimą
+// Mūsų vidiniai komandų kodai - jei API TLA tiesiogiai sutampa, naudojame jį.
+// Visa kita - per pavadinimo žemėlapį (dengia variantus "South Korea" / "Korea Republic" ir t.t.)
+const OUR_TEAM_CODES = new Set([
+  'MEX','RSA','KOR','CZE','CAN','SUI','QAT','BIH','BRA','MAR','HAI','SCO',
+  'USA','PAR','AUS','TUR','GER','CUW','CIV','ECU','NED','JPN','SWE','TUN',
+  'BEL','EGY','IRN','NZL','ESP','CPV','KSA','URU','FRA','SEN','NOR','IRQ',
+  'ARG','ALG','AUT','JOR','POR','COD','UZB','COL','ENG','CRO','GHA','PAN',
+]);
+
 function findTeamCode(apiTeam) {
   if (!apiTeam) return null;
-  // Pirma TLA - jei tiesiogiai sutampa su mūsų kodais (dauguma atveju)
-  if (apiTeam.tla && API_NAME_TO_CODE[apiTeam.name]) {
-    return API_NAME_TO_CODE[apiTeam.name];
+  // 1) Tiesioginis TLA atitikmuo (BRA, ARG, GER ir t.t. - dauguma atveju sutampa)
+  if (apiTeam.tla && OUR_TEAM_CODES.has(apiTeam.tla)) {
+    return apiTeam.tla;
   }
-  // Toliau pagal name
-  if (apiTeam.name && API_NAME_TO_CODE[apiTeam.name]) {
-    return API_NAME_TO_CODE[apiTeam.name];
-  }
-  // Trim ir mažosios raidės kaip atsargumas
-  if (apiTeam.name) {
-    const trimmed = apiTeam.name.trim();
-    if (API_NAME_TO_CODE[trimmed]) return API_NAME_TO_CODE[trimmed];
+  // 2) Per pavadinimo žemėlapį (KOR/RSA/KSA ir kt., kur TLA gali skirtis)
+  const name = apiTeam.name?.trim();
+  if (name && API_NAME_TO_CODE[name]) {
+    return API_NAME_TO_CODE[name];
   }
   return null;
 }

@@ -111,6 +111,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // === TOURNAMENT RESULTS ===
+    // Realūs turnyro laimėtojai (admin įveda po turnyro pabaigos).
+    // Vienas dokumentas: tournamentResults/wc2026 su champion (team code) ir
+    // bestPlayer/topScorer/bestGoalkeeper/bestYoungPlayer (string vardai).
+
+    match /tournamentResults/{resultId} {
+      // Visi prisijungę gali skaityti (reikalinga taškų skaičiavimui klientui)
+      allow read: if isAuth();
+      // Tik admin'as gali rašyti
+      allow write: if isAdmin();
+    }
+
     // === TOURNAMENT BETS ===
     // Turnyro lygio prognozės (čempionas, strielcas, grupių nugalėtojai)
 
@@ -118,10 +130,14 @@ service cloud.firestore {
       // Visi mato (reikalinga lyderlentei vėliau)
       allow read: if isAuth();
 
-      // Tik savininkas gali rašyti
+      // Tik savininkas gali rašyti, IR tik iki turnyro pradžios.
+      // 2026-06-11 00:00 UTC = 2026-06-11 03:00 LT (pirma rungtynė 22:00 LT).
+      // Lock'inama server-side, kad nebūtų galima apeiti per API call'ą po turnyro pradžios.
       allow create: if isOwner(userId) &&
-                       request.resource.data.userId == userId;
-      allow update: if isOwner(userId);
+                       request.resource.data.userId == userId &&
+                       request.time < timestamp.date(2026, 6, 11);
+      allow update: if isOwner(userId) &&
+                       request.time < timestamp.date(2026, 6, 11);
       allow delete: if false;
     }
   }

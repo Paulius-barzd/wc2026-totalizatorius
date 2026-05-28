@@ -9,7 +9,11 @@ import {
   registerUser, loginUser, logoutUser, onAuthChange,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
+  listenToAllTournamentBets, listenToTournamentResults, saveTournamentResults,
   updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches, syncResultsFromAPI,
+  createCompany, updateCompany, deleteCompany, setUserAdmin, setUserCompany,
+  seedKnockoutStructure,
+  TOURNAMENT_LOCK_TIME,
 } from './firebase';
 
 // ============================================================
@@ -79,13 +83,6 @@ const teamsByCode = {
   PAN: { name: 'Panama', code: 'pa' },
 };
 
-const groups = [
-  { id: 'A', teams: ['MEX', 'CAN', 'POR', 'KOR'] },
-  { id: 'B', teams: ['USA', 'ESP', 'GER', 'JPN'] },
-  { id: 'C', teams: ['BRA', 'ITA', 'CRO', 'NED'] },
-  { id: 'D', teams: ['ARG', 'FRA', 'ENG', 'BEL'] },
-];
-
 // Knockout etapų lietuviški pavadinimai (rodomi MatchCard header'yje)
 const STAGE_LABELS = {
   round_of_32: '1/16 finalas',
@@ -154,6 +151,38 @@ const timeUntil = (iso) => {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
+};
+
+// Normalizuoti žaidėjo vardą palyginimui (case-insensitive, trim, dvigubi space'ai)
+const normalizeName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+// Apskaičiuoja taškus už turnyro prognozę pagal admin'o suvestus rezultatus.
+// Grąžina objektą: { champion, bestPlayer, topScorer, bestGoalkeeper, bestYoungPlayer, total }
+const calculateTournamentPoints = (bet, results) => {
+  const pts = { champion: 0, bestPlayer: 0, topScorer: 0, bestGoalkeeper: 0, bestYoungPlayer: 0, total: 0 };
+  if (!bet || !results) return pts;
+  if (bet.champion && results.champion && bet.champion === results.champion) {
+    pts.champion = 25;
+  }
+  const playerFields = ['bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer'];
+  playerFields.forEach((key) => {
+    if (bet[key] && results[key] && normalizeName(bet[key]) === normalizeName(results[key])) {
+      pts[key] = 15;
+    }
+  });
+  pts.total = pts.champion + pts.bestPlayer + pts.topScorer + pts.bestGoalkeeper + pts.bestYoungPlayer;
+  return pts;
+};
+
+// LT linksniavimas pagal skaičių: 1 dalyvis, 2-9 dalyviai, 10-19 dalyvių,
+// 20 dalyvių, 21 dalyvis, 22-29 dalyviai ir t.t.
+const pluralizeLt = (n, forms) => {
+  const abs = Math.abs(n);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 0 || (mod100 >= 11 && mod100 <= 19)) return forms[2];
+  if (mod10 === 1) return forms[0];
+  return forms[1];
 };
 
 const translateAuthError = (code) => {
@@ -609,6 +638,74 @@ const ErrorAlert = ({ message }) => message ? (
   </div>
 ) : null;
 
+// === MODAL DIALOG (custom confirm/alert) ===
+
+const ModalOverlay = ({ children, onClose }) => (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1a1410]/60 backdrop-blur-sm"
+    onClick={onClose}>
+    <div
+      className="card-light rounded-2xl p-5 max-w-sm w-full"
+      onClick={(e) => e.stopPropagation()}>
+      {children}
+    </div>
+  </div>
+);
+
+// useDialog hook - grąžina async `confirm`/`alert` funkcijas ir JSX dialog'ą.
+// Naudoti vietoj native window.confirm/alert, kad UI atitiktų app dizainą.
+function useDialog() {
+  const [state, setState] = useState(null);
+
+  const open = (config) => new Promise((resolve) => {
+    setState({ ...config, resolve });
+  });
+
+  const confirm = (config) => open({ ...config, kind: 'confirm' });
+  const notify = (config) => open({ ...config, kind: 'alert' });
+
+  const close = (result) => {
+    if (state?.resolve) state.resolve(result);
+    setState(null);
+  };
+
+  const dialog = state ? (
+    <ModalOverlay onClose={() => state.kind === 'confirm' ? close(false) : close(true)}>
+      <h3 className="font-display text-base uppercase tracking-wider text-[#1a1410] mb-2">
+        {state.title}
+      </h3>
+      {state.message && (
+        <p className="text-sm text-[#6b6359] mb-4 whitespace-pre-line">{state.message}</p>
+      )}
+      {state.kind === 'confirm' ? (
+        <div className="flex gap-2">
+          <button
+            onClick={() => close(false)}
+            style={{ backgroundColor: '#ffffff', color: '#6b6359', border: '1px solid rgba(20,17,16,0.15)' }}
+            className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#1a1410]/5 transition-all">
+            {state.cancelLabel || 'Atšaukti'}
+          </button>
+          <button
+            onClick={() => close(true)}
+            style={{ backgroundColor: state.variant === 'danger' ? '#c8302e' : '#0e6b47', color: '#ffffff' }}
+            className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:opacity-90">
+            {state.confirmLabel || 'Patvirtinti'}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => close(true)}
+          style={{ backgroundColor: state.variant === 'danger' ? '#c8302e' : '#0e6b47', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:opacity-90">
+          Gerai
+        </button>
+      )}
+    </ModalOverlay>
+  ) : null;
+
+  return { confirm, notify, dialog };
+}
+
 // ============================================================
 // AUTH SCREENS
 // ============================================================
@@ -831,17 +928,62 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
   const upcomingMatches = matches.filter((m) => m.status === 'upcoming').slice(0, 6);
   const liveMatches = matches.filter((m) => m.status === 'live');
 
+  const upcomingSection = upcomingMatches.length > 0 && (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-[#0e6b47]" />
+          <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Artimiausios</h2>
+        </div>
+        <button onClick={() => setScreen('matches')}
+          className="text-[10px] font-bold text-[#0e6b47] uppercase tracking-wider flex items-center gap-1">
+          Visos <ChevronRight className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="space-y-3">
+        {upcomingMatches.map((m) => (
+          <MatchCard key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} />
+        ))}
+      </div>
+    </div>
+  );
+
+  const leaderboardSection = sortedUsers.length > 0 && (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Crown className="w-4 h-4 text-[#b8860b]" />
+        <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Lyderiai</h2>
+      </div>
+      <div className="card-light rounded-xl p-2">
+        {sortedUsers.slice(0, 5).map((u, i) => (
+          <div key={u.uid} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#1a1410]/5 transition-colors">
+            <div className="font-display text-xl w-6 text-center"
+              style={{ color: i === 0 ? '#b8860b' : i === 1 ? '#94806f' : i === 2 ? '#a85a2a' : '#9d9489' }}>
+              {i + 1}
+            </div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center font-display text-sm"
+              style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
+              {u.avatarLetter}
+            </div>
+            <div className="flex-1 text-sm font-semibold text-[#1a1410] truncate">{u.username}</div>
+            <div className="font-mono font-bold text-[#0e6b47]">{u.points}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-4 pb-24">
-      <div className="relative overflow-hidden rounded-2xl p-5 paper-grain"
+    <div className="space-y-4 pb-24 lg:pb-8">
+      <div className="relative overflow-hidden rounded-2xl p-5 lg:p-7 paper-grain"
         style={{ background: 'linear-gradient(135deg, #0a2c4e 0%, #051c30 100%)', color: '#faf7f1' }}>
         <div className="flex items-start gap-4 mb-4">
-          <Emblem className="w-16 h-16 flex-shrink-0" variant="dark" />
+          <Emblem className="w-16 h-16 lg:w-20 lg:h-20 flex-shrink-0" variant="dark" />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-widest mb-1 opacity-70">
               Sveikas, {userProfile.username}
             </div>
-            <h1 className="font-display text-base leading-tight">
+            <h1 className="font-display text-base lg:text-xl leading-tight">
               PASAULIO FUTBOLO<br/>ČEMPIONATAS 2026
             </h1>
             <div className="text-[10px] uppercase tracking-widest opacity-60 mt-1" style={{ color: '#c9a961' }}>
@@ -853,16 +995,16 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
         <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-white/15">
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Taškai</div>
-            <div className="font-display text-2xl">{me.points || 0}</div>
+            <div className="font-display text-2xl lg:text-3xl">{me.points || 0}</div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Vieta</div>
-            <div className="font-display text-2xl">#{myRank || '-'}</div>
+            <div className="font-display text-2xl lg:text-3xl">#{myRank || '-'}</div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Serija</div>
-            <div className="font-display text-2xl flex items-center gap-1" style={{ color: '#f5d27a' }}>
-              {me.streak || 0} <Flame className="w-5 h-5" />
+            <div className="font-display text-2xl lg:text-3xl flex items-center gap-1" style={{ color: '#f5d27a' }}>
+              {me.streak || 0} <Flame className="w-5 h-5 lg:w-6 lg:h-6" />
             </div>
           </div>
         </div>
@@ -874,28 +1016,8 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
             <Radio className="w-4 h-4 text-[#c8302e] pulse-live" />
             <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Vyksta dabar</h2>
           </div>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {liveMatches.map((m) => (
-              <MatchCard key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={() => {}} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {upcomingMatches.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#0e6b47]" />
-              <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Artimiausios</h2>
-            </div>
-            <button onClick={() => setScreen('matches')}
-              className="text-[10px] font-bold text-[#0e6b47] uppercase tracking-wider flex items-center gap-1">
-              Visos <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="space-y-3">
-            {upcomingMatches.map((m) => (
               <MatchCard key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} />
             ))}
           </div>
@@ -910,30 +1032,11 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
         </div>
       )}
 
-      {sortedUsers.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Crown className="w-4 h-4 text-[#b8860b]" />
-            <h2 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Lyderiai</h2>
-          </div>
-          <div className="card-light rounded-xl p-2">
-            {sortedUsers.slice(0, 3).map((u, i) => (
-              <div key={u.uid} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#1a1410]/5 transition-colors">
-                <div className="font-display text-xl w-6 text-center"
-                  style={{ color: i === 0 ? '#b8860b' : i === 1 ? '#94806f' : '#a85a2a' }}>
-                  {i + 1}
-                </div>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center font-display text-sm"
-                  style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
-                  {u.avatarLetter}
-                </div>
-                <div className="flex-1 text-sm font-semibold text-[#1a1410]">{u.username}</div>
-                <div className="font-mono font-bold text-[#0e6b47]">{u.points}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Desktop: upcoming kairėje, leaderboard dešinėje. Mobile: stack vertically. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:items-start">
+        <div className="lg:col-span-2">{upcomingSection}</div>
+        <div>{leaderboardSection}</div>
+      </div>
     </div>
   );
 };
@@ -950,13 +1053,13 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
   }, [filter, matches]);
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl text-[#1a1410] mb-1">RUNGTYNĖS</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">RUNGTYNĖS</h1>
         <p className="text-sm text-[#6b6359]">Spėk rezultatą iki rungtynių pradžios</p>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
+      <div className="flex gap-2 overflow-x-auto lg:flex-wrap lg:overflow-visible scrollbar-hide -mx-1 px-1">
         {[
           { id: 'all', label: 'Visos' },
           { id: 'upcoming', label: 'Būsimos' },
@@ -981,7 +1084,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
           <p className="text-sm text-[#6b6359]">Nėra rungtynių pagal pasirinktą filtrą</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
           {filteredMatches.map((m) => (
             <MatchCard key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} />
           ))}
@@ -992,6 +1095,7 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
 };
 
 const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBet }) => {
+  const { notify, dialog } = useDialog();
   // Lokalus state redagavimui (atskiras nuo tournamentBet)
   const [local, setLocal] = useState({
     champion: tournamentBet?.champion || '',
@@ -1012,10 +1116,11 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
 
   const [isEditing, setIsEditing] = useState(!hasSavedPrediction);
 
-  // Užšaldymas: bet kuri rungtynė pradėta (status != 'upcoming')
+  // Užšaldymas pagal turnyro pradžios timestamp - suderinta su firestore.rules server-side lock'u.
+  // Admin gali laisvai testuoti rungtynių statusus, neužšaldant tournament bet'ų visiems.
   const isLocked = useMemo(
-    () => matches.some((m) => m.status !== 'upcoming'),
-    [matches]
+    () => Date.now() >= TOURNAMENT_LOCK_TIME,
+    [matches] // re-eval kai matches atsinaujina (dažnai), nors deps čia tik trigger
   );
 
   // Ankstyviausios "upcoming" rungtynės countdown'ui
@@ -1084,7 +1189,7 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
       setTimeout(() => setJustSaved(false), 2000);
     } catch (err) {
       console.error(err);
-      alert('Nepavyko išsaugoti: ' + err.message);
+      await notify({ title: 'Nepavyko išsaugoti', message: err.message, variant: 'danger' });
     } finally {
       setSaving(false);
     }
@@ -1115,9 +1220,9 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
   ];
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl text-[#1a1410] mb-1">PROGNOZĖS</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">PROGNOZĖS</h1>
         <p className="text-sm text-[#6b6359]">
           {isLocked
             ? 'Prognozės užšaldytos · turnyras prasidėjęs'
@@ -1135,7 +1240,7 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
           <span className="text-[10px] font-bold text-[#b8860b] uppercase tracking-wider">25 tšk.</span>
         </div>
         <p className="text-xs text-[#6b6359] mb-4">Pasirink turnyro nugalėtoją</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
           {allCountries.map((code) => (
             <TeamPickButton key={code} code={code}
               selected={local.champion === code}
@@ -1146,7 +1251,8 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
         </div>
       </div>
 
-      {/* ŽAIDĖJŲ PROGNOZĖS */}
+      {/* ŽAIDĖJŲ PROGNOZĖS - desktop'e 2-col grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {playerFields.map(({ key, label, icon: Icon, points, color }) => (
         <div key={key} className="card-light rounded-2xl p-5">
           <div className="flex items-center justify-between mb-1">
@@ -1167,6 +1273,7 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
             className="w-full px-4 py-3 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-[#1a1410] placeholder-[#9d9489] focus:outline-none focus:border-[#0e6b47]/50 font-medium disabled:opacity-60 disabled:cursor-not-allowed" />
         </div>
       ))}
+      </div>
 
       {/* MYGTUKAI */}
       {isLocked ? (
@@ -1202,6 +1309,8 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
           </button>
         </div>
       )}
+
+      {dialog}
     </div>
   );
 };
@@ -1320,19 +1429,19 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   };
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl text-[#1a1410] mb-1">LYDERIAI</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">LYDERIAI</h1>
         <p className="text-sm text-[#6b6359]">
-          {tab === 'overall' && `${sortedUsers.length} dalyvių · atnaujinama tiesiogiai`}
-          {tab === 'company' && userProfile.companyName && `${myCompanyUsers.length} dalyvių iš ${userProfile.companyName}`}
+          {tab === 'overall' && `${sortedUsers.length} ${pluralizeLt(sortedUsers.length, ['dalyvis', 'dalyviai', 'dalyvių'])} · atnaujinama tiesiogiai`}
+          {tab === 'company' && userProfile.companyName && `${myCompanyUsers.length} ${pluralizeLt(myCompanyUsers.length, ['dalyvis', 'dalyviai', 'dalyvių'])} iš ${userProfile.companyName}`}
           {tab === 'company' && !userProfile.companyName && 'Tu nepriklausai įmonei'}
-          {tab === 'companies' && `${companyStats.length} įmonių · vidurkis vienam dalyviui`}
+          {tab === 'companies' && `${companyStats.length} ${pluralizeLt(companyStats.length, ['įmonė', 'įmonės', 'įmonių'])} · vidurkis vienam dalyviui`}
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-[#1a1410]/5">
+      <div className="flex gap-1 p-1 rounded-xl bg-[#1a1410]/5 lg:max-w-md">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={tab === t.id ? { backgroundColor: '#ffffff', color: '#1a1410' } : { color: '#6b6359' }}
@@ -1344,12 +1453,12 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
 
       {/* TAB: BENDRA */}
       {tab === 'overall' && (
-        <>
-          {renderPodium(sortedUsers)}
-          <div className="card-light rounded-xl overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:items-start">
+          <div className="lg:col-span-2">{renderPodium(sortedUsers)}</div>
+          <div className="card-light rounded-xl overflow-hidden lg:col-span-3">
             {sortedUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
           </div>
-        </>
+        </div>
       )}
 
       {/* TAB: MANO ĮMONĖ */}
@@ -1365,16 +1474,18 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
             </div>
           ) : (
             <>
-              <div className="card-light rounded-xl p-3 flex items-center gap-2">
+              <div className="card-light rounded-xl p-3 flex items-center gap-2 lg:max-w-md">
                 <div className="w-2 h-8 rounded-full bg-[#0e6b47]"></div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] text-[#6b6359] uppercase tracking-wider">Tavo įmonė</div>
                   <div className="font-display text-base text-[#1a1410] truncate">{userProfile.companyName}</div>
                 </div>
               </div>
-              {renderPodium(myCompanyUsers)}
-              <div className="card-light rounded-xl overflow-hidden">
-                {myCompanyUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:items-start">
+                <div className="lg:col-span-2">{renderPodium(myCompanyUsers)}</div>
+                <div className="card-light rounded-xl overflow-hidden lg:col-span-3">
+                  {myCompanyUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
+                </div>
               </div>
             </>
           )}
@@ -1411,7 +1522,7 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                         {c.companyName} {isMyCompany && <span className="text-[10px] ml-1 opacity-70">(tavo)</span>}
                       </div>
                       <div className="text-[10px] text-[#6b6359]">
-                        {c.memberCount} {c.memberCount === 1 ? 'dalyvis' : (c.memberCount < 10 ? 'dalyviai' : 'dalyvių')} · {c.totalPoints} tšk. iš viso
+                        {c.memberCount} {pluralizeLt(c.memberCount, ['dalyvis', 'dalyviai', 'dalyvių'])} · {c.totalPoints} tšk. iš viso
                       </div>
                     </div>
                     <div className="text-right">
@@ -1429,26 +1540,31 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   );
 };
 
-const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, onLogout, onOpenAdmin }) => {
+const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tournamentResults, onLogout, onOpenAdmin }) => {
   const me = usersWithPoints.find((u) => u.uid === userProfile.uid) || userProfile;
   const finishedMatches = matches.filter((m) => m.status === 'finished');
 
   const stats = useMemo(() => {
-    let exact = 0, diff = 0, outcome = 0, wrong = 0;
+    let exact = 0, diff = 0, outcome = 0, wrong = 0, missed = 0;
     finishedMatches.forEach((m) => {
       const pred = predictions[m.id];
-      if (!pred) return;
+      if (!pred) {
+        missed++;
+        return;
+      }
       const r = calculatePoints(pred, m.actualScore);
       if (r.type === 'exact') exact++;
       else if (r.type === 'diff') diff++;
       else if (r.type === 'outcome') outcome++;
       else wrong++;
     });
-    return { exact, diff, outcome, wrong, total: finishedMatches.length };
+    const predicted = exact + diff + outcome + wrong;
+    return { exact, diff, outcome, wrong, missed, predicted, total: finishedMatches.length };
   }, [predictions, finishedMatches]);
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24 lg:pb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:items-start">
       <div className="card-light rounded-2xl p-5 text-center">
         <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center font-display text-3xl bg-[#faf7f1]"
           style={{ color: userProfile.avatarColor, border: `3px solid ${userProfile.avatarColor}` }}>
@@ -1474,19 +1590,26 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, onL
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="card-light rounded-xl p-4">
+      <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-2 lg:self-stretch">
+        <div className="card-light rounded-xl p-4 flex flex-col justify-center">
           <div className="text-[10px] text-[#6b6359] uppercase tracking-wider mb-1">Iš viso taškų</div>
-          <div className="font-display text-3xl text-[#0e6b47]">{me.points || 0}</div>
+          <div className="font-display text-3xl lg:text-5xl text-[#0e6b47]">{me.points || 0}</div>
         </div>
-        <div className="card-light rounded-xl p-4">
+        <div className="card-light rounded-xl p-4 flex flex-col justify-center">
           <div className="text-[10px] text-[#6b6359] uppercase tracking-wider mb-1">Tikslių rezultatų</div>
-          <div className="font-display text-3xl text-[#b8860b]">{stats.exact}</div>
+          <div className="font-display text-3xl lg:text-5xl text-[#b8860b]">{stats.exact}</div>
         </div>
+      </div>
       </div>
 
       <div className="card-light rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-3">Tikslumas</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Tikslumas</h3>
+          <span className="text-[10px] text-[#6b6359]">
+            {stats.predicted}/{stats.total} sp{pluralizeLt(stats.predicted, ['ėjimas', 'ėjimai', 'ėjimų'])}
+            {stats.missed > 0 && ` · ${stats.missed} praleist${pluralizeLt(stats.missed, ['a', 'os', 'ų'])}`}
+          </span>
+        </div>
         <div className="space-y-2">
           {[
             { label: 'Tikslus rezultatas', count: stats.exact, color: '#0e6b47' },
@@ -1498,7 +1621,7 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, onL
               <div className="text-xs flex-1 text-[#1a1410]">{s.label}</div>
               <div className="flex-1 h-1.5 bg-[#1a1410]/8 rounded-full overflow-hidden">
                 <div className="h-full rounded-full" style={{
-                  width: `${stats.total ? (s.count / stats.total) * 100 : 0}%`,
+                  width: `${stats.predicted ? (s.count / stats.predicted) * 100 : 0}%`,
                   backgroundColor: s.color
                 }} />
               </div>
@@ -1507,6 +1630,39 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, onL
           ))}
         </div>
       </div>
+
+      {/* Turnyro prognozių rezultatas - rodyti tik jei admin'as suvedė rezultatus */}
+      {tournamentResults && (me.tournamentPoints > 0 || me.tournamentBreakdown) && (
+        <div className="card-light rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Turnyro prognozės</h3>
+            <span className="font-mono text-sm font-bold text-[#0e6b47]">+{me.tournamentPoints || 0} tšk.</span>
+          </div>
+          <div className="space-y-1.5">
+            {[
+              { label: 'Čempionas', key: 'champion', points: 25, color: '#b8860b' },
+              { label: 'Geriausias žaidėjas', key: 'bestPlayer', points: 15, color: '#b8860b' },
+              { label: 'Strielcas', key: 'topScorer', points: 15, color: '#0e6b47' },
+              { label: 'Vartininkas', key: 'bestGoalkeeper', points: 15, color: '#0a2c4e' },
+              { label: 'Jaunasis', key: 'bestYoungPlayer', points: 15, color: '#c8302e' },
+            ].map((row) => {
+              const earned = me.tournamentBreakdown?.[row.key] > 0;
+              const hasResult = row.key === 'champion' ? !!tournamentResults.champion : !!tournamentResults[row.key];
+              if (!hasResult) return null;
+              return (
+                <div key={row.key} className="flex items-center justify-between text-xs">
+                  <span className="text-[#1a1410]">{row.label}</span>
+                  {earned ? (
+                    <span className="font-mono font-bold" style={{ color: row.color }}>+{row.points} tšk.</span>
+                  ) : (
+                    <span className="text-[#9d9489]">−</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {userProfile.isAdmin && (
         <button onClick={onOpenAdmin}
@@ -1525,45 +1681,692 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, onL
   );
 };
 
-const AdminScreen = ({ matches, onClose }) => {
+// === BRACKET SCREEN (knockout vizualizacija) ===
+
+const KNOCKOUT_STAGES = ['round_of_32', 'round_of_16', 'quarter_final', 'semi_final', 'third_place', 'final'];
+
+// Mini match cell bracket'ui (kompaktiškas, su prognozės input'u)
+const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
+  const isLocked = match.status !== 'upcoming';
+  const home = teamsByCode[match.home];
+  const away = teamsByCode[match.away];
+  const noTeams = !home || !away;
+
+  const [localPred, setLocalPred] = useState({
+    home: prediction?.home ?? 0,
+    away: prediction?.away ?? 0,
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (prediction) setLocalPred({ home: prediction.home, away: prediction.away });
+  }, [prediction?.home, prediction?.away]);
+
+  const hasChanges = !prediction
+    ? (localPred.home !== 0 || localPred.away !== 0)
+    : prediction.home !== localPred.home || prediction.away !== localPred.away;
+
+  let pointsResult = null;
+  if (match.status === 'finished' && prediction) {
+    pointsResult = calculatePoints(prediction, match.actualScore);
+  }
+
+  const handleSave = async () => {
+    if (isLocked || !hasChanges || saving || noTeams) return;
+    setSaving(true);
+    try {
+      await onUpdatePrediction(match.id, localPred);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="card-light rounded-lg p-2.5 text-xs">
+      <div className="text-[9px] text-[#6b6359] mb-1.5 truncate">{formatKickoff(match.kickoff)}</div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Flag code={home?.code} className="w-5 h-3.5 flex-shrink-0" />
+            <span className="text-[11px] font-semibold text-[#1a1410] truncate">
+              {home?.name || <span className="text-[#9d9489]">TBD</span>}
+            </span>
+          </div>
+          {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
+            <span className="font-mono text-sm font-bold text-[#1a1410]">{match.actualScore.home}</span>
+          ) : !isLocked && !noTeams ? (
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => setLocalPred({ ...localPred, home: Math.max(0, localPred.home - 1) })}
+                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">−</button>
+              <span className="w-5 text-center font-mono text-xs font-bold text-[#0e6b47]">{localPred.home}</span>
+              <button onClick={() => setLocalPred({ ...localPred, home: Math.min(9, localPred.home + 1) })}
+                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">+</button>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Flag code={away?.code} className="w-5 h-3.5 flex-shrink-0" />
+            <span className="text-[11px] font-semibold text-[#1a1410] truncate">
+              {away?.name || <span className="text-[#9d9489]">TBD</span>}
+            </span>
+          </div>
+          {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
+            <span className="font-mono text-sm font-bold text-[#1a1410]">{match.actualScore.away}</span>
+          ) : !isLocked && !noTeams ? (
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => setLocalPred({ ...localPred, away: Math.max(0, localPred.away - 1) })}
+                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">−</button>
+              <span className="w-5 text-center font-mono text-xs font-bold text-[#0e6b47]">{localPred.away}</span>
+              <button onClick={() => setLocalPred({ ...localPred, away: Math.min(9, localPred.away + 1) })}
+                className="w-5 h-5 rounded bg-[#1a1410]/5 text-[#6b6359] text-xs leading-none">+</button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {!isLocked && !noTeams && hasChanges && (
+        <button onClick={handleSave} disabled={saving}
+          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          className="w-full mt-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1">
+          {saving && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+          Patvirtinti
+        </button>
+      )}
+      {match.status === 'finished' && pointsResult && (
+        <div className="mt-1.5 text-center">
+          <span className="text-[9px] text-[#6b6359]">
+            Spėjo {prediction ? `${prediction.home}:${prediction.away}` : '−'} ·
+          </span>
+          <span className="text-[9px] font-bold ml-1" style={{
+            color: pointsResult.type === 'exact' ? '#0e6b47' :
+                   pointsResult.type === 'diff' ? '#b8860b' :
+                   pointsResult.type === 'outcome' ? '#0a2c4e' : '#9d9489'
+          }}>+{pointsResult.pts} tšk.</span>
+        </div>
+      )}
+      {isLocked && !pointsResult && prediction && (
+        <div className="mt-1.5 text-center text-[9px] text-[#6b6359]">
+          Spėjo {prediction.home}:{prediction.away}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
+  const knockoutMatches = useMemo(() => {
+    return matches.filter((m) => m.stage && KNOCKOUT_STAGES.includes(m.stage));
+  }, [matches]);
+
+  const byStage = useMemo(() => {
+    const groups = {};
+    KNOCKOUT_STAGES.forEach((s) => { groups[s] = []; });
+    knockoutMatches.forEach((m) => {
+      if (groups[m.stage]) groups[m.stage].push(m);
+    });
+    // Sort each stage by kickoff
+    Object.values(groups).forEach((arr) => arr.sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')));
+    return groups;
+  }, [knockoutMatches]);
+
+  if (knockoutMatches.length === 0) {
+    return (
+      <div className="space-y-4 pb-24 lg:pb-8">
+        <div>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">KNOCKOUT</h1>
+          <p className="text-sm text-[#6b6359]">1/16 finalas · Aštuntfinalis · ... · Finalas</p>
+        </div>
+        <div className="card-light rounded-xl p-6 text-center">
+          <AlertCircle className="w-8 h-8 text-[#b8860b] mx-auto mb-2" />
+          <p className="text-sm text-[#1a1410] font-semibold mb-1">Knockout etapas dar nesukurtas</p>
+          <p className="text-xs text-[#6b6359]">Administratorius gali sukurti struktūrą admin skydelyje.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 pb-24 lg:pb-8">
+      <div>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#1a1410] mb-1">KNOCKOUT</h1>
+        <p className="text-sm text-[#6b6359]">{knockoutMatches.length} rungtynių · spėk visus etapus</p>
+      </div>
+
+      {/* Mobile: stack vertically. Desktop: horizontal scroll bracket */}
+      <div className="lg:overflow-x-auto lg:scrollbar-hide">
+        <div className="space-y-6 lg:space-y-0 lg:flex lg:gap-4 lg:min-w-max">
+          {KNOCKOUT_STAGES.map((stage) => {
+            const stageMatches = byStage[stage];
+            if (!stageMatches || stageMatches.length === 0) return null;
+            return (
+              <div key={stage} className="lg:w-64 lg:flex-shrink-0">
+                <div className="font-display text-xs uppercase tracking-wider text-[#0a2c4e] mb-3 px-1">
+                  {STAGE_LABELS[stage]}
+                </div>
+                <div className="space-y-2 lg:flex lg:flex-col lg:justify-around lg:h-full">
+                  {stageMatches.map((m) => (
+                    <BracketCell key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// === ADMIN: ĮMONIŲ VALDYMAS ===
+
+const AdminCompaniesPanel = ({ companies, users }) => {
+  const { confirm, notify, dialog } = useDialog();
+  const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Skaičiuoti dalyvius kiekvienai įmonei
+  const userCounts = useMemo(() => {
+    const counts = {};
+    users.forEach((u) => {
+      if (u.companyId) counts[u.companyId] = (counts[u.companyId] || 0) + 1;
+    });
+    return counts;
+  }, [users]);
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setBusy(true);
+    try {
+      await createCompany(newName);
+      setNewName('');
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editName.trim()) return;
+    setBusy(true);
+    try {
+      await updateCompany(editingId, editName);
+      setEditingId(null);
+      setEditName('');
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (company) => {
+    const count = userCounts[company.id] || 0;
+    if (count > 0) {
+      await notify({
+        title: 'Negalima ištrinti',
+        message: `Įmonė "${company.name}" turi ${count} ${pluralizeLt(count, ['dalyvį', 'dalyvius', 'dalyvių'])}. Pirma perskirk juos kitur.`,
+        variant: 'danger',
+      });
+      return;
+    }
+    const ok = await confirm({
+      title: 'Ištrinti įmonę',
+      message: `Bus ištrinta įmonė "${company.name}". Veiksmas negrįžtamas.`,
+      confirmLabel: 'Ištrinti',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await deleteCompany(company.id);
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Pridėti naują */}
+      <div className="card-light rounded-xl p-4">
+        <div className="font-display text-sm uppercase tracking-wider text-[#1a1410] mb-3">Nauja įmonė</div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="Pavadinimas, pvz., VMG"
+            disabled={busy}
+            className="flex-1 px-3 py-2 rounded-lg bg-[#faf7f1] border border-[#1a1410]/10 text-sm focus:outline-none focus:border-[#0e6b47]/50 disabled:opacity-50" />
+          <button
+            onClick={handleCreate}
+            disabled={busy || !newName.trim()}
+            style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 flex items-center gap-1">
+            {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            <Plus className="w-3.5 h-3.5" /> Pridėti
+          </button>
+        </div>
+      </div>
+
+      {/* Sąrašas */}
+      {companies.length === 0 ? (
+        <div className="card-light rounded-xl p-5 text-center">
+          <p className="text-sm text-[#6b6359]">Įmonių dar nėra. Pridėk pirmąją virš.</p>
+        </div>
+      ) : (
+        <div className="card-light rounded-xl overflow-hidden">
+          {companies.map((c) => {
+            const count = userCounts[c.id] || 0;
+            const isEditing = editingId === c.id;
+            return (
+              <div key={c.id} className="flex items-center gap-3 p-3 border-b border-[#1a1410]/8 last:border-0">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display text-sm bg-[#0a2c4e]/10 text-[#0a2c4e] flex-shrink-0">
+                  {(c.name || '?')[0].toUpperCase()}
+                </div>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                    autoFocus
+                    disabled={busy}
+                    className="flex-1 px-3 py-1.5 rounded border border-[#0e6b47]/40 text-sm focus:outline-none focus:border-[#0e6b47]" />
+                ) : (
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[#1a1410] truncate">{c.name}</div>
+                    <div className="text-[10px] text-[#6b6359]">
+                      {count} {pluralizeLt(count, ['dalyvis', 'dalyviai', 'dalyvių'])}
+                    </div>
+                  </div>
+                )}
+                {isEditing ? (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={handleSaveEdit} disabled={busy || !editName.trim()}
+                      style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50">
+                      Saugoti
+                    </button>
+                    <button onClick={() => { setEditingId(null); setEditName(''); }}
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white border border-[#1a1410]/15">
+                      Atš.
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => { setEditingId(c.id); setEditName(c.name); }}
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#0a2c4e] hover:bg-[#0a2c4e]/5">
+                      Keisti
+                    </button>
+                    <button onClick={() => handleDelete(c)} disabled={busy}
+                      className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider text-[#c8302e] hover:bg-[#c8302e]/5 disabled:opacity-50">
+                      Trinti
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {dialog}
+    </div>
+  );
+};
+
+// === ADMIN: VARTOTOJŲ VALDYMAS ===
+
+const AdminUsersPanel = ({ users, companies, currentUid }) => {
+  const { confirm, notify, dialog } = useDialog();
+  const [busyUid, setBusyUid] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const sorted = [...users].sort((a, b) => (a.username || '').localeCompare(b.username || '', 'lt'));
+    if (!q) return sorted;
+    return sorted.filter(
+      (u) =>
+        (u.username || '').toLowerCase().includes(q) ||
+        (u.fullName || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  const handleToggleAdmin = async (user) => {
+    const willBeAdmin = !user.isAdmin;
+    if (user.uid === currentUid && !willBeAdmin) {
+      const ok = await confirm({
+        title: 'Atimti sau admin teises?',
+        message: 'Po šio veiksmo nebematysi admin panelės. Atstatyti gali tik kitas admin'as arba Firebase Console.',
+        confirmLabel: 'Atimti',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+    setBusyUid(user.uid);
+    try {
+      await setUserAdmin(user.uid, willBeAdmin);
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
+  const handleChangeCompany = async (user, companyId) => {
+    setBusyUid(user.uid);
+    try {
+      if (!companyId) {
+        await setUserCompany(user.uid, null, null);
+      } else {
+        const company = companies.find((c) => c.id === companyId);
+        await setUserCompany(user.uid, companyId, company?.name || null);
+      }
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Ieškoti pagal vardą, el. paštą..."
+        className="w-full px-3 py-2 rounded-lg bg-white border border-[#1a1410]/10 text-sm focus:outline-none focus:border-[#0e6b47]/50" />
+
+      {filteredUsers.length === 0 ? (
+        <div className="card-light rounded-xl p-5 text-center">
+          <p className="text-sm text-[#6b6359]">Vartotojų nerasta</p>
+        </div>
+      ) : (
+        <div className="card-light rounded-xl overflow-hidden">
+          {filteredUsers.map((u) => {
+            const isBusy = busyUid === u.uid;
+            const isMe = u.uid === currentUid;
+            return (
+              <div key={u.uid} className="p-3 border-b border-[#1a1410]/8 last:border-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm flex-shrink-0"
+                    style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
+                    {u.avatarLetter}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[#1a1410] truncate">
+                      {u.username} {isMe && <span className="text-[10px] text-[#6b6359]">(tu)</span>}
+                    </div>
+                    <div className="text-[10px] text-[#6b6359] truncate">{u.email}</div>
+                  </div>
+                  {u.isAdmin && (
+                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#0a2c4e]/10 border border-[#0a2c4e]/30 flex-shrink-0">
+                      <Settings className="w-2.5 h-2.5 text-[#0a2c4e]" />
+                      <span className="text-[9px] font-bold text-[#0a2c4e] uppercase tracking-wider">Admin</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 pl-12">
+                  <select
+                    value={u.companyId || ''}
+                    onChange={(e) => handleChangeCompany(u, e.target.value || null)}
+                    disabled={isBusy}
+                    className="flex-1 px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white disabled:opacity-50">
+                    <option value="">Be įmonės</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleToggleAdmin(u)}
+                    disabled={isBusy}
+                    style={u.isAdmin
+                      ? { backgroundColor: '#ffffff', color: '#c8302e', border: '1px solid rgba(200, 48, 46, 0.3)' }
+                      : { backgroundColor: '#0a2c4e', color: '#ffffff' }}
+                    className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 whitespace-nowrap">
+                    {isBusy && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {u.isAdmin ? 'Atimti admin' : 'Suteikti admin'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {dialog}
+    </div>
+  );
+};
+
+// === ADMIN: TURNYRO REZULTATAI (čempionas + žaidėjų laimėtojai) ===
+
+const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, users }) => {
+  const { notify, dialog } = useDialog();
+  const [form, setForm] = useState({
+    champion: tournamentResults?.champion || '',
+    bestPlayer: tournamentResults?.bestPlayer || '',
+    topScorer: tournamentResults?.topScorer || '',
+    bestGoalkeeper: tournamentResults?.bestGoalkeeper || '',
+    bestYoungPlayer: tournamentResults?.bestYoungPlayer || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    if (tournamentResults) {
+      setForm({
+        champion: tournamentResults.champion || '',
+        bestPlayer: tournamentResults.bestPlayer || '',
+        topScorer: tournamentResults.topScorer || '',
+        bestGoalkeeper: tournamentResults.bestGoalkeeper || '',
+        bestYoungPlayer: tournamentResults.bestYoungPlayer || '',
+      });
+    }
+  }, [tournamentResults?.champion, tournamentResults?.bestPlayer, tournamentResults?.topScorer,
+      tournamentResults?.bestGoalkeeper, tournamentResults?.bestYoungPlayer]);
+
+  // Visos dalyvaujančios šalys
+  const allCountries = useMemo(() => {
+    const codes = new Set();
+    matches.forEach((m) => {
+      if (m.home) codes.add(m.home);
+      if (m.away) codes.add(m.away);
+    });
+    Object.keys(teamsByCode).forEach((c) => codes.add(c));
+    return Array.from(codes)
+      .filter((c) => teamsByCode[c])
+      .sort((a, b) => (teamsByCode[a]?.name || '').localeCompare(teamsByCode[b]?.name || '', 'lt'));
+  }, [matches]);
+
+  // Statistika kiek vartotojų bus apdovanoti kiekvienam laukui (preview admin'ui)
+  const winnerCounts = useMemo(() => {
+    const counts = { champion: 0, bestPlayer: 0, topScorer: 0, bestGoalkeeper: 0, bestYoungPlayer: 0 };
+    if (!form.champion && !form.bestPlayer && !form.topScorer && !form.bestGoalkeeper && !form.bestYoungPlayer) {
+      return counts;
+    }
+    allTournamentBets.forEach((bet) => {
+      if (form.champion && bet.champion === form.champion) counts.champion++;
+      ['bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer'].forEach((key) => {
+        if (form[key] && bet[key] && normalizeName(bet[key]) === normalizeName(form[key])) {
+          counts[key]++;
+        }
+      });
+    });
+    return counts;
+  }, [allTournamentBets, form]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveTournamentResults(form);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2000);
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fields = [
+    { key: 'bestPlayer', label: 'Geriausias žaidėjas', points: 15, color: '#b8860b' },
+    { key: 'topScorer', label: 'Daugiausiai įvarčių', points: 15, color: '#0e6b47' },
+    { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', points: 15, color: '#0a2c4e' },
+    { key: 'bestYoungPlayer', label: 'Geriausias 21m. ar jaunesnis', points: 15, color: '#c8302e' },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="card-light rounded-xl p-4 bg-[#0a2c4e]/5 border-[#0a2c4e]/20">
+        <p className="text-xs text-[#1a1410]">
+          <strong>Pastaba:</strong> įvedus realius laimėtojus, visiems dalyviams automatiškai pridedami taškai už atitinkančias prognozes. Vardai lyginami case-insensitive (tarpai/raidžių registras nesvarbu). Tikrink vardus prieš įrašydamas.
+        </p>
+      </div>
+
+      {/* Čempionas */}
+      <div className="card-light rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Crown className="w-4 h-4 text-[#b8860b]" />
+            <span className="font-display text-sm uppercase tracking-wider text-[#1a1410]">Čempionas</span>
+          </div>
+          <span className="text-[10px] font-bold text-[#b8860b] uppercase tracking-wider">25 tšk.</span>
+        </div>
+        <select value={form.champion}
+          onChange={(e) => setForm({ ...form, champion: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg bg-white border border-[#1a1410]/15 text-sm focus:outline-none focus:border-[#0e6b47]/50">
+          <option value="">— Nenustatyta —</option>
+          {allCountries.map((code) => (
+            <option key={code} value={code}>{teamsByCode[code].name}</option>
+          ))}
+        </select>
+        {form.champion && (
+          <div className="mt-2 text-[10px] text-[#6b6359]">
+            {winnerCounts.champion} {pluralizeLt(winnerCounts.champion, ['dalyvis atspėjo', 'dalyviai atspėjo', 'dalyvių atspėjo'])} → +25 tšk. kiekvienam
+          </div>
+        )}
+      </div>
+
+      {/* Žaidėjų laukai */}
+      {fields.map(({ key, label, points, color }) => (
+        <div key={key} className="card-light rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-display text-sm uppercase tracking-wider text-[#1a1410]">{label}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{points} tšk.</span>
+          </div>
+          <input type="text"
+            value={form[key]}
+            onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+            placeholder="pvz., Lionel Messi"
+            className="w-full px-3 py-2 rounded-lg bg-white border border-[#1a1410]/15 text-sm focus:outline-none focus:border-[#0e6b47]/50" />
+          {form[key] && (
+            <div className="mt-2 text-[10px] text-[#6b6359]">
+              {winnerCounts[key]} {pluralizeLt(winnerCounts[key], ['dalyvis atspėjo', 'dalyviai atspėjo', 'dalyvių atspėjo'])} → +{points} tšk. kiekvienam
+            </div>
+          )}
+        </div>
+      ))}
+
+      <button onClick={handleSave} disabled={saving || justSaved}
+        style={justSaved
+          ? { backgroundColor: '#0e6b47', color: '#ffffff' }
+          : { backgroundColor: '#0a2c4e', color: '#ffffff' }}
+        className="w-full py-3 rounded-xl font-display uppercase tracking-wider text-xs disabled:opacity-60 flex items-center justify-center gap-2">
+        {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+        {justSaved && <CheckCircle2 className="w-4 h-4" />}
+        {saving ? 'Saugoma...' : justSaved ? 'Išsaugota' : 'Išsaugoti rezultatus'}
+      </button>
+
+      {dialog}
+    </div>
+  );
+};
+
+const AdminScreen = ({ matches, users, companies, tournamentResults, allTournamentBets, currentUid, onClose }) => {
+  const [tab, setTab] = useState('matches'); // 'matches' | 'companies' | 'users'
   const [seeding, setSeeding] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
   const [editForm, setEditForm] = useState({ home: 0, away: 0, status: 'upcoming' });
+  const { confirm, notify, dialog } = useDialog();
 
   const handleSeed = async () => {
-    if (!confirm('Sukurti 8 demo rungtynes? Tai perrašys esamas su tais pačiais ID.')) return;
+    const ok = await confirm({
+      title: 'Sukurti demo rungtynes',
+      message: 'Bus sukurtos 8 demo rungtynės. Esami m1-m8 dokumentai bus perrašyti.',
+      confirmLabel: 'Sukurti',
+    });
+    if (!ok) return;
     setSeeding(true);
     try {
       await seedDemoMatches();
-      alert('Demo rungtynės sukurtos!');
+      await notify({ title: 'Pavyko', message: 'Demo rungtynės sukurtos!' });
     } catch (err) {
-      alert('Klaida: ' + err.message);
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
       setSeeding(false);
     }
   };
 
   const handleSeedWC2026 = async () => {
-    if (!confirm('Sukurti visas 72 PFČ 2026 grupių etapo rungtynes su tikrais oficialiais duomenimis?\n\nLaikai - Lietuvos laiku. Esami g01-g72 dokumentai bus perrašyti.')) return;
+    const ok = await confirm({
+      title: 'Įkelti PFČ 2026 rungtynes',
+      message: 'Bus sukurtos visos 72 PFČ 2026 grupių etapo rungtynės su tikrais oficialiais duomenimis. Laikai - Lietuvos laiku. Esami g01-g72 dokumentai bus perrašyti.',
+      confirmLabel: 'Įkelti',
+    });
+    if (!ok) return;
     setSeeding(true);
     try {
       const count = await seedWC2026Matches();
-      alert(`Sukurta ${count} tikrų PFČ 2026 grupių etapo rungtynių!`);
+      await notify({ title: 'Pavyko', message: `Sukurta ${count} tikrų PFČ 2026 grupių etapo rungtynių!` });
     } catch (err) {
-      alert('Klaida: ' + err.message);
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
       setSeeding(false);
     }
   };
 
   const handleDeleteDemo = async () => {
-    if (!confirm('Ištrinti visas 8 demo rungtynes (m1-m8)?\n\nTai nepalies tikrų PFČ 2026 rungtynių (g01-g72).')) return;
+    const ok = await confirm({
+      title: 'Ištrinti demo rungtynes',
+      message: 'Bus ištrintos visos 8 demo rungtynės (m1-m8). Tai nepalies tikrų PFČ 2026 rungtynių (g01-g72).',
+      confirmLabel: 'Ištrinti',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setSeeding(true);
     try {
       await deleteDemoMatches();
-      alert('Demo rungtynės ištrintos.');
+      await notify({ title: 'Pavyko', message: 'Demo rungtynės ištrintos.' });
     } catch (err) {
-      alert('Klaida: ' + err.message);
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleSeedKnockout = async () => {
+    const ok = await confirm({
+      title: 'Sukurti knockout struktūrą',
+      message: 'Bus sukurti 32 tušti knockout etapo match\'ai (k01-k32) be priskirtų komandų. Komandas priskirsi rankiniu būdu (per "Redaguoti") po grupių etapo, arba API sync užpildys automatiškai. Esami k01-k32 dokumentai bus perrašyti.',
+      confirmLabel: 'Sukurti',
+    });
+    if (!ok) return;
+    setSeeding(true);
+    try {
+      const count = await seedKnockoutStructure();
+      await notify({ title: 'Pavyko', message: `Sukurti ${count} knockout etapo placeholder'iai.` });
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     } finally {
       setSeeding(false);
     }
@@ -1573,23 +2376,27 @@ const AdminScreen = ({ matches, onClose }) => {
     setSeeding(true);
     try {
       const stats = await syncResultsFromAPI();
-      let msg = `Sinchronizacija baigta!\n\n` +
-        `🔄 Iš API: ${stats.total} rungtynių\n` +
-        `✅ Suderinta: ${stats.matched}\n` +
-        `📝 Atnaujinta: ${stats.updated}\n`;
+      let msg =
+        `Iš API: ${stats.total} rungtynių\n` +
+        `Suderinta: ${stats.matched}\n` +
+        `Atnaujinta: ${stats.updated}\n`;
       if (stats.created > 0) {
-        msg += `🆕 Sukurta naujų (knockout): ${stats.created}\n`;
+        msg += `Sukurta naujų (knockout): ${stats.created}\n`;
       }
-      msg += `⏸ Be pakeitimų: ${stats.skipped}`;
+      msg += `Be pakeitimų: ${stats.skipped}`;
       if (stats.unmatched.length > 0) {
         const shown = stats.unmatched.slice(0, 5).join('\n  • ');
-        msg += `\n\n⚠️ Nepriderinta (${stats.unmatched.length}):\n  • ${shown}`;
+        msg += `\n\nNepriderinta (${stats.unmatched.length}):\n  • ${shown}`;
         if (stats.unmatched.length > 5) msg += `\n  • ... ir dar ${stats.unmatched.length - 5}`;
         msg += `\n\n(Knockout etapo rungtynės be komandų - laukia grupių rezultatų)`;
       }
-      alert(msg);
+      await notify({ title: 'Sinchronizacija baigta', message: msg });
     } catch (err) {
-      alert('Klaida: ' + err.message + '\n\nGali tiesiog įvesti rezultatus rankiniu būdu žemiau.');
+      await notify({
+        title: 'Klaida',
+        message: err.message + '\n\nGali tiesiog įvesti rezultatus rankiniu būdu žemiau.',
+        variant: 'danger',
+      });
     } finally {
       setSeeding(false);
     }
@@ -1601,6 +2408,9 @@ const AdminScreen = ({ matches, onClose }) => {
       home: match.actualScore?.home || 0,
       away: match.actualScore?.away || 0,
       status: match.status,
+      homeTeam: match.home || '',
+      awayTeam: match.away || '',
+      isKnockout: match.stage && match.stage !== 'group',
     });
   };
 
@@ -1612,25 +2422,62 @@ const AdminScreen = ({ matches, onClose }) => {
       } else {
         updates.actualScore = null;
       }
+      // Knockout etapo match'ams - leisti keisti komandas
+      if (editForm.isKnockout) {
+        updates.home = editForm.homeTeam || null;
+        updates.away = editForm.awayTeam || null;
+      }
       await updateMatch(editingMatch, updates);
       setEditingMatch(null);
     } catch (err) {
-      alert('Klaida: ' + err.message);
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
     }
   };
 
+  const tabs = [
+    { id: 'matches', label: 'Rungtynės' },
+    { id: 'results', label: 'Rezultatai' },
+    { id: 'companies', label: 'Įmonės' },
+    { id: 'users', label: 'Vartotojai' },
+  ];
+
+  const tabSubtitle = {
+    matches: 'Rungtynių valdymas',
+    results: 'Turnyro laimėtojai (čempionas, žaidėjai)',
+    companies: 'Įmonių sąrašas ir dalyvių paskirstymas',
+    users: 'Vartotojai, admin teisės, įmonių keitimas',
+  }[tab];
+
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24 lg:pb-8">
       <div className="flex items-center gap-3">
         <button onClick={onClose} className="text-[#6b6359] hover:text-[#1a1410]">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="font-display text-2xl text-[#1a1410]">ADMIN</h1>
-          <p className="text-xs text-[#6b6359]">Rungtynių valdymas</p>
+          <p className="text-xs text-[#6b6359]">{tabSubtitle}</p>
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl bg-[#1a1410]/5">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={tab === t.id ? { backgroundColor: '#ffffff', color: '#1a1410' } : { color: '#6b6359' }}
+            className="flex-1 py-2 px-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all">
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'results' && <AdminResultsPanel tournamentResults={tournamentResults}
+        matches={matches} allTournamentBets={allTournamentBets} users={users} />}
+      {tab === 'companies' && <AdminCompaniesPanel companies={companies} users={users} />}
+      {tab === 'users' && <AdminUsersPanel users={users} companies={companies} currentUid={currentUid} />}
+
+      {tab === 'matches' && (
+        <>
       {/* API sinchronizavimas - svarbiausias mygtukas */}
       <div className="card-light rounded-xl p-4 space-y-3" style={{ borderLeft: '3px solid #0e6b47' }}>
         <div>
@@ -1667,6 +2514,13 @@ const AdminScreen = ({ matches, onClose }) => {
           Įkelti PFČ 2026 rungtynes (72)
         </button>
 
+        <button onClick={handleSeedKnockout} disabled={seeding}
+          style={{ backgroundColor: '#0e6b47', color: '#ffffff' }}
+          className="w-full py-2.5 rounded-lg font-display uppercase tracking-wider text-xs disabled:opacity-50 flex items-center justify-center gap-2">
+          {seeding && <Loader2 className="w-4 h-4 animate-spin" />}
+          Sukurti knockout struktūrą (32)
+        </button>
+
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSeed} disabled={seeding}
             style={{ backgroundColor: '#6b6359', color: '#ffffff' }}
@@ -1692,19 +2546,56 @@ const AdminScreen = ({ matches, onClose }) => {
         {matches.map((m) => (
           <div key={m.id} className="card-light rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <Flag code={teamsByCode[m.home]?.code} className="w-6 h-4" />
-                <span className="text-xs font-bold">{teamsByCode[m.home]?.name}</span>
+                <span className="text-xs font-bold truncate">
+                  {teamsByCode[m.home]?.name || <span className="text-[#9d9489]">TBD</span>}
+                </span>
                 <span className="text-[#9d9489] text-xs">vs</span>
-                <span className="text-xs font-bold">{teamsByCode[m.away]?.name}</span>
+                <span className="text-xs font-bold truncate">
+                  {teamsByCode[m.away]?.name || <span className="text-[#9d9489]">TBD</span>}
+                </span>
                 <Flag code={teamsByCode[m.away]?.code} className="w-6 h-4" />
               </div>
               <StatusBadge status={m.status} />
             </div>
-            <div className="text-[10px] text-[#6b6359] mb-2">{formatKickoff(m.kickoff)}</div>
+            <div className="text-[10px] text-[#6b6359] mb-2 flex items-center gap-2">
+              <span>{formatKickoff(m.kickoff)}</span>
+              {m.stage && m.stage !== 'group' && (
+                <span className="text-[9px] font-bold text-[#0a2c4e] uppercase tracking-wider">
+                  · {STAGE_LABELS[m.stage]}
+                </span>
+              )}
+            </div>
 
             {editingMatch === m.id ? (
               <div className="space-y-2 pt-2 border-t border-[#1a1410]/8">
+                {editForm.isKnockout && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-[#6b6359] uppercase tracking-wider block mb-1">Šeimininkai</label>
+                      <select value={editForm.homeTeam}
+                        onChange={(e) => setEditForm({ ...editForm, homeTeam: e.target.value })}
+                        className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white">
+                        <option value="">— TBD —</option>
+                        {Object.keys(teamsByCode).sort((a, b) => teamsByCode[a].name.localeCompare(teamsByCode[b].name, 'lt')).map((code) => (
+                          <option key={code} value={code}>{teamsByCode[code].name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-[#6b6359] uppercase tracking-wider block mb-1">Svečiai</label>
+                      <select value={editForm.awayTeam}
+                        onChange={(e) => setEditForm({ ...editForm, awayTeam: e.target.value })}
+                        className="w-full px-2 py-1.5 rounded border border-[#1a1410]/15 text-xs bg-white">
+                        <option value="">— TBD —</option>
+                        {Object.keys(teamsByCode).sort((a, b) => teamsByCode[a].name.localeCompare(teamsByCode[b].name, 'lt')).map((code) => (
+                          <option key={code} value={code}>{teamsByCode[code].name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 justify-center">
                   <input type="number" min="0" max="20" value={editForm.home}
                     onChange={(e) => setEditForm({ ...editForm, home: e.target.value })}
@@ -1754,6 +2645,10 @@ const AdminScreen = ({ matches, onClose }) => {
           <strong>Pastaba:</strong> Pakeitus rungtynių rezultatą į "Baigta", visų vartotojų taškai automatiškai perskaičiuojami pagal jų prognozes.
         </p>
       </div>
+        </>
+      )}
+
+      {dialog}
     </div>
   );
 };
@@ -1763,6 +2658,7 @@ const AdminScreen = ({ matches, onClose }) => {
 // ============================================================
 
 export default function App() {
+  const { notify, dialog } = useDialog();
   // Auth state
   const [authUser, setAuthUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
@@ -1776,6 +2672,8 @@ export default function App() {
   const [companies, setCompanies] = useState([]);
   const [predictions, setPredictions] = useState({});
   const [allPredictions, setAllPredictions] = useState([]);
+  const [allTournamentBets, setAllTournamentBets] = useState([]);
+  const [tournamentResults, setTournamentResults] = useState(null);
   const [tournamentBet, setTournamentBet] = useState({
     champion: null,
     bestPlayer: '',
@@ -1818,6 +2716,8 @@ export default function App() {
       listenToUserPredictions(authUser.uid, setPredictions),
       listenToAllPredictions(setAllPredictions),
       listenToUsers(setUsers),
+      listenToAllTournamentBets(setAllTournamentBets),
+      listenToTournamentResults(setTournamentResults),
     ];
     return () => unsubs.forEach((u) => u());
   }, [authUser]);
@@ -1827,11 +2727,11 @@ export default function App() {
     return listenToCompanies(setCompanies);
   }, []);
 
-  // Calculate points for all users
+  // Calculate points for all users (match prognosis + tournament prognosis)
   const usersWithPoints = useMemo(() => {
     return users.map((u) => {
       const userPreds = allPredictions.filter((p) => p.userId === u.uid);
-      let totalPoints = 0;
+      let matchPoints = 0;
       let streak = 0;
       let streakBroken = false;
       // Rūšiuoti pagal kickoff (naujausi paskutiniai), kad streak skaičiuotų teisingai
@@ -1843,15 +2743,27 @@ export default function App() {
 
       sortedPreds.forEach(({ pred, match }) => {
         const result = calculatePoints({ home: pred.home, away: pred.away }, match.actualScore);
-        totalPoints += result.pts;
+        matchPoints += result.pts;
         if (!streakBroken) {
           if (result.pts > 0) streak++;
           else streakBroken = true;
         }
       });
-      return { ...u, points: totalPoints, streak };
+
+      // Turnyro prognozės taškai (čempionas + 4 žaidėjų kategorijos)
+      const userBet = allTournamentBets.find((b) => b.userId === u.uid);
+      const tournamentPts = calculateTournamentPoints(userBet, tournamentResults);
+
+      return {
+        ...u,
+        points: matchPoints + tournamentPts.total,
+        matchPoints,
+        tournamentPoints: tournamentPts.total,
+        tournamentBreakdown: tournamentPts,
+        streak,
+      };
     });
-  }, [users, allPredictions, matches]);
+  }, [users, allPredictions, matches, allTournamentBets, tournamentResults]);
 
   // Handlers
   const handleUpdatePrediction = async (matchId, value) => {
@@ -1860,7 +2772,11 @@ export default function App() {
       await savePrediction(authUser.uid, matchId, value.home, value.away);
     } catch (err) {
       console.error('Save prediction failed:', err);
-      alert('Nepavyko išsaugoti prognozės. Patikrink ar rungtynės dar neprasidėjo.');
+      await notify({
+        title: 'Nepavyko išsaugoti',
+        message: 'Patikrink ar rungtynės dar neprasidėjo.',
+        variant: 'danger',
+      });
     }
   };
 
@@ -1886,9 +2802,17 @@ export default function App() {
     return (
       <div className="app-bg font-body text-[#1a1410]">
         <Styles />
-        <div className="max-w-md mx-auto min-h-screen px-4 pt-4">
-          <AdminScreen matches={matches} onClose={() => setScreen('profile')} />
+        <div className="max-w-md lg:max-w-4xl mx-auto min-h-screen px-4 pt-4">
+          <AdminScreen
+            matches={matches}
+            users={users}
+            companies={companies}
+            tournamentResults={tournamentResults}
+            allTournamentBets={allTournamentBets}
+            currentUid={authUser.uid}
+            onClose={() => setScreen('profile')} />
         </div>
+        {dialog}
       </div>
     );
   }
@@ -1897,6 +2821,7 @@ export default function App() {
   const navItems = [
     { id: 'home', icon: Home, label: 'Pradžia' },
     { id: 'matches', icon: Calendar, label: 'Rungtynės' },
+    { id: 'bracket', icon: Award, label: 'Bracket' },
     { id: 'tournament', icon: Trophy, label: 'Prognozės' },
     { id: 'leaderboard', icon: BarChart3, label: 'Lyderiai' },
   ];
@@ -1904,17 +2829,37 @@ export default function App() {
   return (
     <div className="app-bg font-body text-[#1a1410]">
       <Styles />
-      <div className="max-w-md mx-auto min-h-screen flex flex-col">
-        <header className="sticky top-0 z-40 glass-light px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+      <div className="max-w-md lg:max-w-5xl mx-auto min-h-screen flex flex-col">
+        <header className="sticky top-0 z-40 glass-light px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 flex-shrink-0">
             <Emblem className="w-9 h-9" variant="light" />
             <div>
               <div className="font-display text-sm text-[#1a1410] leading-none tracking-wide">PFČ 2026</div>
               <div className="text-[9px] text-[#6b6359] uppercase tracking-widest mt-0.5">Totalizatorius</div>
             </div>
           </div>
+
+          {/* Desktop: tabs viduryje header'io */}
+          <nav className="hidden lg:flex flex-1 justify-center gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = screen === item.id;
+              return (
+                <button key={item.id} onClick={() => setScreen(item.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    active
+                      ? 'bg-[#0e6b47]/10 text-[#0e6b47]'
+                      : 'text-[#6b6359] hover:text-[#1a1410] hover:bg-[#1a1410]/5'
+                  }`}>
+                  <Icon className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
           <button onClick={() => setScreen('profile')}
-            className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm transition-transform hover:scale-105 bg-white"
+            className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm transition-transform hover:scale-105 bg-white flex-shrink-0"
             style={{ color: userProfile.avatarColor, border: `1.5px solid ${userProfile.avatarColor}80` }}>
             {userProfile.avatarLetter}
           </button>
@@ -1925,17 +2870,20 @@ export default function App() {
             matches={matches} predictions={predictions} setScreen={setScreen} onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'matches' && <MatchesScreen matches={matches} predictions={predictions}
             onUpdatePrediction={handleUpdatePrediction} />}
+          {screen === 'bracket' && <BracketScreen matches={matches} predictions={predictions}
+            onUpdatePrediction={handleUpdatePrediction} />}
           {screen === 'tournament' && <TournamentScreen userProfile={userProfile} matches={matches}
             tournamentBet={tournamentBet} setTournamentBet={setTournamentBet} />}
           {screen === 'leaderboard' && <LeaderboardScreen usersWithPoints={usersWithPoints}
             userProfile={userProfile} />}
           {screen === 'profile' && <ProfileScreen userProfile={userProfile} usersWithPoints={usersWithPoints}
-            matches={matches} predictions={predictions} onLogout={handleLogout}
-            onOpenAdmin={() => setScreen('admin')} />}
+            matches={matches} predictions={predictions} tournamentResults={tournamentResults}
+            onLogout={handleLogout} onOpenAdmin={() => setScreen('admin')} />}
         </main>
 
-        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-light px-2 py-2 z-30">
-          <div className="grid grid-cols-4 gap-1">
+        {/* Mobile bottom nav - desktop'e paslėpta (header'io tabs naudojami) */}
+        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-light px-2 py-2 z-30 lg:hidden">
+          <div className="grid grid-cols-5 gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = screen === item.id;
@@ -1952,6 +2900,7 @@ export default function App() {
           </div>
         </nav>
       </div>
+      {dialog}
     </div>
   );
 }
