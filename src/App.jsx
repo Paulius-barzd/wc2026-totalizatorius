@@ -325,13 +325,29 @@ const Flag = ({ code, className = 'w-8 h-6' }) => {
   );
 };
 
-// VMG „W" mark - stilizuotas brand monogram'as su WOOD→CURRANT gradient'u.
-// Tikrą SVG logo failą galima įkelti į /public ir pakeisti šitą komponentą.
-const Emblem = ({ className = 'w-16 h-16', variant = 'dark' }) => {
+// VMG logotipas. Jei /public/vmg-mark.png (arba .svg) yra įkeltas, naudojamas tikras logo.
+// Jei nėra - fallback'as į stilizuotą inline SVG „W" mark'ą.
+// Norint įkelti tikrą logo: StackBlitz'e public/ folder'is → New file → vmg-mark.png/svg → įkelti.
+const Emblem = ({ className = 'w-16 h-16', variant = 'dark', full = false }) => {
+  const [imageError, setImageError] = useState(false);
+
+  // Pirma bandyti realų logo iš /public
+  if (!imageError) {
+    const src = full ? '/vmg-logo-full.png' : '/vmg-mark.png';
+    return (
+      <img
+        src={src}
+        alt="VMG"
+        className={className}
+        onError={() => setImageError(true)}
+        style={{ objectFit: 'contain' }}
+      />
+    );
+  }
+
+  // Fallback - inline SVG su VMG brand spalvomis
   const isDark = variant === 'dark';
   const gradId = `vmg-grad-${variant}`;
-  // Tamsiame variante (ant CRIMSON fono) - WOOD shadow su WHITE highlight
-  // Šviesiame variante (ant WHITE fono) - WOOD su CURRANT shadow
   const stops = isDark
     ? [{ offset: '0%', color: '#D1A974' }, { offset: '50%', color: '#FFFFFF' }, { offset: '100%', color: '#D1A974' }]
     : [{ offset: '0%', color: '#D1A974' }, { offset: '50%', color: '#FFFFFF' }, { offset: '100%', color: '#845641' }];
@@ -344,18 +360,11 @@ const Emblem = ({ className = 'w-16 h-16', variant = 'dark' }) => {
           {stops.map((s, i) => <stop key={i} offset={s.offset} stopColor={s.color} />)}
         </linearGradient>
       </defs>
-      {/* W ribbon mark - 3 banguotos juostelės su gradient'u ir CRIMSON shadow trikampiais */}
-      {/* Kairė juostelė */}
-      <path d="M 10 28 Q 20 20, 30 28 L 45 75 Q 35 80, 25 75 Z"
-        fill={`url(#${gradId})`} />
+      <path d="M 10 28 Q 20 20, 30 28 L 45 75 Q 35 80, 25 75 Z" fill={`url(#${gradId})`} />
       <path d="M 28 30 L 38 70 L 32 70 L 22 32 Z" fill={shadowFill} opacity="0.85" />
-      {/* Vidurinė juostelė */}
-      <path d="M 35 28 Q 50 18, 65 28 L 60 75 Q 45 80, 40 75 Z"
-        fill={`url(#${gradId})`} />
+      <path d="M 35 28 Q 50 18, 65 28 L 60 75 Q 45 80, 40 75 Z" fill={`url(#${gradId})`} />
       <path d="M 50 30 L 50 70 L 44 70 L 44 32 Z" fill={shadowFill} opacity="0.85" />
-      {/* Dešinė juostelė + užkėlimas */}
-      <path d="M 65 28 Q 78 22, 88 30 Q 90 50, 85 72 L 70 75 Q 60 70, 60 60 Z"
-        fill={`url(#${gradId})`} />
+      <path d="M 65 28 Q 78 22, 88 30 Q 90 50, 85 72 L 70 75 Q 60 70, 60 60 Z" fill={`url(#${gradId})`} />
       <path d="M 70 32 L 80 65 L 74 70 L 64 35 Z" fill={shadowFill} opacity="0.85" />
     </svg>
   );
@@ -662,17 +671,34 @@ const FormField = ({ label, type = 'text', placeholder, value, onChange, autoCom
   </div>
 );
 
-// Futbolo kamuolio ikona (Lucide neturi soccer ball - custom inline SVG)
+// Futbolo kamuolio ikona — pilna pentagon/hexagon paneliais + 3D sheen efektas.
+// Naudoja currentColor → adaptuojasi prie konteksto spalvos.
 const FootballIcon = ({ className = 'w-5 h-5' }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor"
-    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <polygon points="12,7 16,10 14.5,15 9.5,15 8,10" />
-    <line x1="12" y1="7" x2="12" y2="3" />
-    <line x1="16" y1="10" x2="20" y2="9" />
-    <line x1="8" y1="10" x2="4" y2="9" />
-    <line x1="14.5" y1="15" x2="17.5" y2="19" />
-    <line x1="9.5" y1="15" x2="6.5" y2="19" />
+  <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="ballSheen" cx="35%" cy="30%" r="65%">
+        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.55" />
+        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+    {/* Pagrindinis kamuolio apskritimas su švelniu užpildymu */}
+    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.12" stroke="currentColor" strokeWidth="1.6" />
+    {/* Centrinis pentagonas - tamsus */}
+    <polygon points="12,7 15.8,9.8 14.4,14.5 9.6,14.5 8.2,9.8" fill="currentColor" />
+    {/* 5 šoniniai pentagonai - šiek tiek šviesesni (subtilesnis raštas) */}
+    <polygon points="12,3 14.2,5.5 12,7 9.8,5.5" fill="currentColor" opacity="0.55" />
+    <polygon points="20.5,8.5 18.5,11 15.8,9.8 17,6.8" fill="currentColor" opacity="0.55" />
+    <polygon points="3.5,8.5 5.5,11 8.2,9.8 7,6.8" fill="currentColor" opacity="0.55" />
+    <polygon points="7,20 9,17 11.5,18.5 10,21" fill="currentColor" opacity="0.55" />
+    <polygon points="17,20 15,17 12.5,18.5 14,21" fill="currentColor" opacity="0.55" />
+    {/* Panelių jungtys */}
+    <line x1="12" y1="7" x2="12" y2="5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="15.8" y1="9.8" x2="17" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="8.2" y1="9.8" x2="7" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="14.4" y1="14.5" x2="15" y2="16.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="9.6" y1="14.5" x2="9" y2="16.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    {/* 3D sheen highlight */}
+    <circle cx="12" cy="12" r="10" fill="url(#ballSheen)" />
   </svg>
 );
 
@@ -792,7 +818,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
       <Styles />
       <div className="max-w-md w-full">
         <div className="relative overflow-hidden rounded-2xl p-6 paper-grain mb-4"
-          style={{ background: 'linear-gradient(135deg, #54130E 0%, #441514 100%)', color: '#FFFFFF' }}>
+          style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 60%, #54130E 100%)', color: '#FFFFFF' }}>
           <div className="flex justify-center mb-4">
             <Emblem className="w-24 h-24" variant="dark" />
           </div>
@@ -806,7 +832,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
           </div>
           <p className="font-display text-center text-sm tracking-widest opacity-90">TOTALIZATORIUS</p>
           <p className="text-[10px] uppercase tracking-widest opacity-60 mt-3 text-center">
-            Vidinis totalizatorius · birž. 11 — liep. 19
+            Įrodyk, kas čia futbolo ekspertas · birž. 11 — liep. 19
           </p>
         </div>
 
@@ -816,7 +842,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
           <ErrorAlert message={error} />
 
           <div className="space-y-3">
-            <FormField label="El. paštas" type="email" placeholder="vardas@example.com"
+            <FormField label="El. paštas" type="email" placeholder="vardas@paštas.lt"
               value={email} onChange={setEmail} autoComplete="email" />
             <FormField label="Slaptažodis" type="password" placeholder="••••••••"
               value={password} onChange={setPassword} autoComplete="current-password" />
@@ -824,14 +850,14 @@ const LoginScreen = ({ onSwitchToRegister }) => {
 
           <div className="grid grid-cols-2 gap-2 mt-5">
             <button onClick={handleLogin} disabled={loading}
-              style={{ backgroundColor: '#54130E', color: '#ffffff' }}
-              className="py-3 rounded-xl font-display uppercase tracking-wider transition-opacity hover:opacity-90 shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 100%)', color: '#ffffff' }}
+              className="py-3 rounded-xl font-display uppercase tracking-wider shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:brightness-110 active:scale-[0.98]">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Prisijungti
             </button>
             <button onClick={onSwitchToRegister} disabled={loading}
-              style={{ backgroundColor: '#ffffff', color: '#54130E', border: '2px solid #54130E' }}
-              className="py-3 rounded-xl font-display uppercase tracking-wider transition-colors text-sm disabled:opacity-50">
+              style={{ backgroundColor: '#ffffff', color: '#6A1107', border: '2px solid #6A1107' }}
+              className="py-3 rounded-xl font-display uppercase tracking-wider text-sm disabled:opacity-50 transition-all duration-200 hover:bg-[#FAF0E0] hover:scale-[1.02]">
               Registruotis
             </button>
           </div>
@@ -860,7 +886,7 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
       return;
     }
     if (!form.companyChoice) {
-      setError('Pasirink įmonę (arba „Be įmonės")');
+      setError('Pasirink savo įmonę');
       return;
     }
     if (form.password.length < 8) {
@@ -882,18 +908,16 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
     setError('');
     setLoading(true);
     try {
-      // companyChoice: "none" = Be įmonės, kitaip = company.id
-      let companyId = null;
-      let companyName = null;
-      let companyCode = null;
-      if (form.companyChoice !== 'none') {
-        const company = companies.find((c) => c.id === form.companyChoice);
-        if (company) {
-          companyId = company.id;
-          companyName = company.name;
-          companyCode = company.code || null;
-        }
+      // companyChoice = company.id - visi vartotojai turi priklausyti įmonei
+      const company = companies.find((c) => c.id === form.companyChoice);
+      if (!company) {
+        setError('Pasirinkta įmonė nerasta');
+        setLoading(false);
+        return;
       }
+      const companyId = company.id;
+      const companyName = company.name;
+      const companyCode = company.code || null;
       await registerUser(form.email, form.password, form.username, form.fullName, companyId, companyName, companyCode);
       // onAuthChange auto-pakeis ekraną
     } catch (err) {
@@ -914,12 +938,12 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
 
         {/* Gradient border wrapper - kortelė su VMG brand spalvomis */}
         <div className="relative rounded-2xl p-[1.5px] shadow-xl transition-shadow duration-300 hover:shadow-2xl"
-          style={{ background: 'linear-gradient(135deg, #54130E 0%, #6A1107 40%, #D1A974 100%)' }}>
+          style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 40%, #D1A974 100%)' }}>
           <div className="bg-white rounded-2xl p-6">
             {/* Header - kamuolio ikona dėžutėje su gradient'u + gradient text */}
             <div className="flex items-center gap-3 mb-2">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:rotate-6"
-                style={{ background: 'linear-gradient(135deg, #54130E 0%, #6A1107 100%)' }}>
+                style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 100%)' }}>
                 <FootballIcon className="w-6 h-6 text-[#D1A974]" />
               </div>
               <h2 className="font-display text-xl uppercase tracking-wider"
@@ -962,11 +986,10 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
                       {c.code ? `${c.code} — ${c.name}` : c.name}
                     </option>
                   ))}
-                  <option value="none">Be įmonės</option>
                 </select>
                 {companies.length === 0 && (
-                  <p className="text-[10px] text-[#845641] mt-1">
-                    Įmonių dar nėra. Gali pasirinkti „Be įmonės" arba palaukti, kol administratorius pridės.
+                  <p className="text-[10px] text-[#6A1107] mt-1 font-semibold">
+                    Įmonių sąrašas tuščias. Palauk, kol administratorius pridės — be įmonės registruotis negalima.
                   </p>
                 )}
               </div>
@@ -974,15 +997,11 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
 
             {/* Submit mygtukas su gradient + scale hover + shadow grow */}
             <button onClick={handleRegister} disabled={loading}
-              style={{ background: 'linear-gradient(135deg, #54130E 0%, #6A1107 100%)' }}
+              style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 100%)' }}
               className="w-full py-3.5 rounded-xl font-display uppercase tracking-wider text-white shadow-lg text-sm mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:brightness-110 active:scale-[0.98]">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Sukurti paskyrą
             </button>
-
-            <p className="text-[10px] text-center text-[#845641] mt-3">
-              Sukurdamas paskyrą sutinki su naudojimo taisyklėmis
-            </p>
           </div>
         </div>
 
@@ -1057,7 +1076,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div className="relative overflow-hidden rounded-2xl p-5 lg:p-7 paper-grain"
-        style={{ background: 'linear-gradient(135deg, #54130E 0%, #441514 100%)', color: '#FFFFFF' }}>
+        style={{ background: 'linear-gradient(135deg, #8B2D22 0%, #6A1107 60%, #54130E 100%)', color: '#FFFFFF' }}>
         <div className="flex items-start gap-4 mb-4">
           <Emblem className="w-16 h-16 lg:w-20 lg:h-20 flex-shrink-0" variant="dark" />
           <div className="flex-1 min-w-0">
@@ -1303,7 +1322,7 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">PROGNOZĖS</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ČEMPIONATO SPĖJIMAS</h1>
         <p className="text-sm text-[#845641]">
           {isLocked
             ? 'Prognozės užšaldytos · turnyras jau prasidėjęs'
@@ -1510,16 +1529,65 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
     );
   };
 
+  // Bendri statistikos skaičiavimai - visam pulai
+  const totalUsers = sortedUsers.length;
+  const totalCompaniesCount = companyStats.length;
+  // Didžiausia įmonė pagal narių skaičių
+  const largestCompany = companyStats.length > 0
+    ? [...companyStats].sort((a, b) => b.memberCount - a.memberCount)[0]
+    : null;
+  // Tavo pozicija visame pule
+  const myRankNum = sortedUsers.findIndex((u) => u.uid === userProfile.uid) + 1;
+
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">LYDERIAI</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">STATISTIKA</h1>
         <p className="text-sm text-[#845641]">
           {tab === 'overall' && `${sortedUsers.length} ${pluralizeLt(sortedUsers.length, ['dalyvis', 'dalyviai', 'dalyvių'])} · atnaujinama tiesiogiai`}
           {tab === 'company' && userProfile.companyName && `${myCompanyUsers.length} ${pluralizeLt(myCompanyUsers.length, ['dalyvis', 'dalyviai', 'dalyvių'])} iš ${userProfile.companyName}`}
           {tab === 'company' && !userProfile.companyName && 'Tu nepriklausai įmonei'}
           {tab === 'companies' && `${companyStats.length} ${pluralizeLt(companyStats.length, ['įmonė', 'įmonės', 'įmonių'])} · vidurkis vienam dalyviui`}
         </p>
+      </div>
+
+      {/* Bendros statistikos kortelės - 4 mini kortelės */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="card-light rounded-xl p-3 text-center transition-transform hover:scale-[1.02]">
+          <div className="font-display text-2xl lg:text-3xl text-[#54130E]">{totalUsers}</div>
+          <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1">
+            {pluralizeLt(totalUsers, ['Dalyvis', 'Dalyviai', 'Dalyvių'])}
+          </div>
+        </div>
+        <div className="card-light rounded-xl p-3 text-center transition-transform hover:scale-[1.02]">
+          <div className="font-display text-2xl lg:text-3xl text-[#6A1107]">{totalCompaniesCount}</div>
+          <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1">
+            {pluralizeLt(totalCompaniesCount, ['Įmonė', 'Įmonės', 'Įmonių'])}
+          </div>
+        </div>
+        {largestCompany ? (
+          <div className="card-light rounded-xl p-3 text-center transition-transform hover:scale-[1.02]">
+            <div className="font-display text-lg lg:text-xl text-[#845641] truncate">
+              {largestCompany.companyCode || largestCompany.companyName}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1">
+              Didžiausia · {largestCompany.memberCount} {pluralizeLt(largestCompany.memberCount, ['dal.', 'dal.', 'dal.'])}
+            </div>
+          </div>
+        ) : (
+          <div className="card-light rounded-xl p-3 text-center opacity-50">
+            <div className="font-display text-lg text-[#A88A6F]">—</div>
+            <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1">Didžiausia įmonė</div>
+          </div>
+        )}
+        <div className="card-light rounded-xl p-3 text-center transition-transform hover:scale-[1.02]">
+          <div className="font-display text-2xl lg:text-3xl text-[#4A6B47]">
+            #{myRankNum || '−'}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1">
+            Tavo pozicija · iš {totalUsers}
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1962,15 +2030,15 @@ const RulesScreen = () => {
         </p>
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-3 rounded-full bg-[#54130E]" />
+            <span className="w-2 h-3 rounded-full bg-[#4A6B47]" />
             <span className="text-[#441514]"><strong>1-2 vieta</strong> — tiesiogiai į atkrintamųjų varžybų etapą (1/16 finalo)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-3 rounded-full bg-[#D1A974]" />
+            <span className="w-2 h-3 rounded-full bg-[#C97D3F]" />
             <span className="text-[#441514]"><strong>3 vieta</strong> — 8 geriausios (iš 12) taip pat patenka į atkrintamąsias</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-3 rounded-full bg-[#A88A6F]" />
+            <span className="w-2 h-3 rounded-full bg-[#6A1107]" />
             <span className="text-[#441514]"><strong>4 vieta</strong> — iškrenta iš turnyro</span>
           </div>
         </div>
@@ -2059,11 +2127,13 @@ const calculateStandings = (groupTeams, groupMatches) => {
 };
 
 // Spalvos pozicijai: 1-2 vieta - kvalifikuojasi (žalia), 3 vieta - galimai geriausių 8 (geltona), 4 vieta - eliminuotas (pilka)
+// Pozicijų spalvos suderintos su brand'u: žalsva (kvalifikuojasi),
+// oranžinė-medienos (galimai), tamsiai raudona (eliminuota).
 const positionStyle = (pos) => {
-  if (pos === 1) return { dot: '#54130E', label: 'text-[#54130E]' };
-  if (pos === 2) return { dot: '#54130E', label: 'text-[#54130E]' };
-  if (pos === 3) return { dot: '#D1A974', label: 'text-[#D1A974]' };
-  return { dot: '#A88A6F', label: 'text-[#845641]' };
+  if (pos === 1) return { dot: '#4A6B47', label: 'text-[#4A6B47]' };  // sage green - tvirtai į atkrintamąsias
+  if (pos === 2) return { dot: '#4A6B47', label: 'text-[#4A6B47]' };
+  if (pos === 3) return { dot: '#C97D3F', label: 'text-[#C97D3F]' };  // terracotta orange - galimai (8 geriausi)
+  return { dot: '#6A1107', label: 'text-[#6A1107]' };                 // RUBY - iškrenta
 };
 
 const GroupStandingsTable = ({ groupId, teams, matches }) => {
@@ -2222,15 +2292,15 @@ const GroupsScreen = ({ matches }) => {
       {/* Legenda */}
       <div className="card-light rounded-xl p-3 flex flex-wrap items-center gap-4 text-[11px]">
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-3 rounded-full bg-[#54130E]" />
+          <span className="w-2 h-3 rounded-full bg-[#4A6B47]" />
           <span className="text-[#441514]">1-2 vieta — į atkrintamąsias</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-3 rounded-full bg-[#D1A974]" />
+          <span className="w-2 h-3 rounded-full bg-[#C97D3F]" />
           <span className="text-[#441514]">3 vieta — galimai (8 geriausi iš 12)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-3 rounded-full bg-[#A88A6F]" />
+          <span className="w-2 h-3 rounded-full bg-[#6A1107]" />
           <span className="text-[#441514]">4 vieta — eliminuota</span>
         </div>
       </div>
@@ -2428,7 +2498,7 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
     return (
       <div className="space-y-4 pb-24 lg:pb-8">
         <div>
-          <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRITIMO ETAPAS</h1>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRINTAMOSIOS VARŽYBOS</h1>
           <p className="text-sm text-[#845641]">1/16 finalas · Aštuntfinalis · ... · Finalas</p>
         </div>
         <div className="card-light rounded-xl p-6 text-center">
@@ -3533,9 +3603,9 @@ export default function App() {
     { id: 'home', icon: Home, label: 'Pradžia' },
     { id: 'matches', icon: Calendar, label: 'Rungtynės' },
     { id: 'groups', icon: Shield, label: 'Grupės' },
-    { id: 'bracket', icon: Award, label: 'Atkritimas' },
+    { id: 'bracket', icon: Award, label: 'Atkrintamosios' },
     { id: 'tournament', icon: Trophy, label: 'Prognozės' },
-    { id: 'leaderboard', icon: BarChart3, label: 'Lyderiai' },
+    { id: 'leaderboard', icon: BarChart3, label: 'Statistika' },
     { id: 'rules', icon: BookOpen, label: 'Taisyklės' },
   ];
 

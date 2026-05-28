@@ -48,9 +48,16 @@ export const TOURNAMENT_LOCK_TIME = new Date('2026-06-11T00:00:00Z').getTime();
 // === AUTH HELPERS ===
 
 // Spalvų paletė vartotojo avatarui
+// VMG brand-aligned avatar paletė - visi tonai iš firminės spalvų gamos
 const AVATAR_COLORS = [
-  '#0e6b47', '#b8860b', '#0a2c4e', '#c8302e',
-  '#2563eb', '#dd6b20', '#0891b2', '#7c3aed',
+  '#54130E', // CRIMSON
+  '#6A1107', // RUBY
+  '#441514', // CURRANT
+  '#8B2D22', // šviesesnė CRIMSON
+  '#D1A974', // WOOD
+  '#845641', // STEM
+  '#A04942', // medium ruby (70% tint)
+  '#B86344', // wood-ish brown
 ];
 
 export async function registerUser(email, password, username, fullName, companyId, companyName, companyCode) {
