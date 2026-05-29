@@ -1508,7 +1508,7 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
 
 const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   const [tab, setTab] = useState('overall'); // 'overall' | 'company' | 'companies'
-  const [companySort, setCompanySort] = useState('avg'); // 'avg' | 'members'
+  const [showCompanySizes, setShowCompanySizes] = useState(false); // toggle apatinės sekcijos su įmonių dydžiais
 
   const sortedUsers = useMemo(
     () => [...usersWithPoints].sort((a, b) => b.points - a.points),
@@ -1543,14 +1543,16 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
       memberCount: s.members.length,
       avgPoints: s.members.length > 0 ? s.totalPoints / s.members.length : 0,
     }));
-    // Rūšiavimas pagal companySort: 'avg' (vidurkis) arba 'members' (dalyvių sk.)
-    if (companySort === 'members') {
-      arr.sort((a, b) => b.memberCount - a.memberCount || b.avgPoints - a.avgPoints);
-    } else {
-      arr.sort((a, b) => b.avgPoints - a.avgPoints);
-    }
+    // Rūšiavimas: pagal vidurkį vienam dalyviui (sąžiningas mažoms ir didelėms įmonėms)
+    arr.sort((a, b) => b.avgPoints - a.avgPoints);
     return arr;
-  }, [sortedUsers, companySort]);
+  }, [sortedUsers]);
+
+  // Atskira rūšiuota kopija pagal dalyvių sk. - rodoma kai paspaudžiama "Didžiausia" kortelė
+  const companiesBySize = useMemo(
+    () => [...companyStats].sort((a, b) => b.memberCount - a.memberCount || b.avgPoints - a.avgPoints),
+    [companyStats]
+  );
 
   const tabs = [
     { id: 'overall', label: 'Bendra' },
@@ -1663,14 +1665,19 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
           </div>
         </div>
         {largestCompany ? (
-          <div className="card-light rounded-xl p-3 text-center transition-transform hover:scale-[1.02]">
+          <button
+            onClick={() => setShowCompanySizes((v) => !v)}
+            className={`card-light rounded-xl p-3 text-center transition-all duration-200 hover:scale-[1.02] hover:brightness-95 active:scale-[0.99] ${showCompanySizes ? 'ring-2 ring-[#54130E]/30' : ''}`}>
             <div className="font-display text-lg lg:text-xl text-[#845641] truncate">
               {largestCompany.companyCode || largestCompany.companyName}
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1">
-              Didžiausia · {largestCompany.memberCount} {pluralizeLt(largestCompany.memberCount, ['dal.', 'dal.', 'dal.'])}
+            <div className="text-[10px] uppercase tracking-wider text-[#845641] mt-1 flex items-center justify-center gap-1">
+              <span>Didžiausia · {largestCompany.memberCount} {pluralizeLt(largestCompany.memberCount, ['dal.', 'dal.', 'dal.'])}</span>
+              {showCompanySizes
+                ? <ChevronLeft className="w-3 h-3 rotate-90" />
+                : <ChevronRight className="w-3 h-3 rotate-90" />}
             </div>
-          </div>
+          </button>
         ) : (
           <div className="card-light rounded-xl p-3 text-center opacity-50">
             <div className="font-display text-lg text-[#A88A6F]">—</div>
@@ -1687,16 +1694,49 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         </div>
       </div>
 
-      {/* Shortcut mygtukas - jei daugiau nei viena įmonė, pasiūlyti rūšiavimą pagal dydį */}
-      {totalCompaniesCount > 1 && (
-        <button
-          onClick={() => { setTab('companies'); setCompanySort('members'); }}
-          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#FFFFFF' }}
-          className="w-full py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md transition-all duration-200 hover:scale-[1.01] hover:brightness-110 hover:shadow-lg active:scale-[0.99] flex items-center justify-center gap-2">
-          <Shield className="w-4 h-4" />
-          Dalyvių skaičius pagal įmones
-          <ChevronRight className="w-4 h-4" />
-        </button>
+      {/* Expandable sekcija - rodoma kai paspausta „Didžiausia" kortelė */}
+      {showCompanySizes && companiesBySize.length > 0 && (
+        <div className="card-light rounded-xl overflow-hidden border-2 border-[#54130E]/15">
+          <div className="px-4 py-3 bg-[#54130E]/5 border-b border-[#54130E]/15 flex items-center justify-between">
+            <div>
+              <div className="font-display text-sm uppercase tracking-wider text-[#54130E]">Dalyvių skaičius pagal įmones</div>
+              <div className="text-[10px] text-[#845641] mt-0.5">Rūšiavimas pagal narių skaičių</div>
+            </div>
+            <button onClick={() => setShowCompanySizes(false)}
+              className="text-[#845641] hover:text-[#441514] p-1 rounded-lg hover:bg-[#441514]/5 transition-colors">
+              <ChevronLeft className="w-4 h-4 -rotate-90" />
+            </button>
+          </div>
+          <div className="divide-y divide-[#441514]/8">
+            {companiesBySize.map((c, i) => {
+              const isMyCompany = c.companyId === userProfile.companyId;
+              const abbrev = companyAbbreviation({ name: c.companyName, code: c.companyCode });
+              const iconClass = abbrev.length > 2
+                ? 'w-auto min-w-[40px] px-1.5 h-9 text-xs'
+                : 'w-9 h-9 text-sm';
+              return (
+                <div key={c.companyId}
+                  className={`flex items-center gap-3 px-4 py-2.5 ${isMyCompany ? 'bg-[#54130E]/5' : ''}`}>
+                  <div className="font-display text-sm w-6 text-center text-[#845641]">{i + 1}</div>
+                  <div className={`${iconClass} rounded-lg flex items-center justify-center font-display font-mono tracking-tight bg-[#54130E]/10 text-[#54130E] flex-shrink-0`}>
+                    {abbrev}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-semibold truncate ${isMyCompany ? 'text-[#54130E]' : 'text-[#441514]'}`}>
+                      {c.companyName} {isMyCompany && <span className="text-[10px] ml-1 opacity-70">(tavo)</span>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-[#54130E]">{c.memberCount}</div>
+                    <div className="text-[9px] text-[#845641] uppercase tracking-wider">
+                      {pluralizeLt(c.memberCount, ['dal.', 'dal.', 'dal.'])}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Tabs */}
@@ -1754,27 +1794,10 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
       {/* TAB: ĮMONĖS */}
       {tab === 'companies' && (
         <>
-          {/* Sort toggle: pagal vidurkį / pagal dalyvių sk. */}
-          <div className="flex gap-1 p-1 rounded-xl bg-[#441514]/5 lg:max-w-xs">
-            <button onClick={() => setCompanySort('avg')}
-              style={companySort === 'avg' ? { backgroundColor: '#FFFFFF', color: '#441514' } : { color: '#845641' }}
-              className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all">
-              Pagal vidurkį
-            </button>
-            <button onClick={() => setCompanySort('members')}
-              style={companySort === 'members' ? { backgroundColor: '#FFFFFF', color: '#441514' } : { color: '#845641' }}
-              className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all">
-              Pagal dydį
-            </button>
-          </div>
-
           <div className="rounded-xl p-3 bg-[#54130E]/5 border border-[#54130E]/15">
             <p className="text-[11px] text-[#54130E] leading-relaxed">
-              <span className="font-bold">Kaip skaičiuojama:</span>{' '}
-              {companySort === 'avg'
-                ? <>įmonės rikiuojamos pagal taškų <span className="font-bold">vidurkį vienam dalyviui</span>. Taip mažos įmonės gali sąžiningai konkuruoti su didelėmis — dydis nesuteikia pranašumo.</>
-                : <>įmonės rikiuojamos pagal <span className="font-bold">dalyvių skaičių</span>. Rodo, kuri įmonė atvedė daugiausiai žaidėjų.</>
-              }
+              <span className="font-bold">Kaip skaičiuojama:</span> įmonės rikiuojamos pagal taškų <span className="font-bold">vidurkį vienam dalyviui</span>.
+              Taip mažos įmonės gali sąžiningai konkuruoti su didelėmis — dydis nesuteikia pranašumo.
             </p>
           </div>
 
@@ -1790,11 +1813,6 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                 const iconClass = abbrev.length > 2
                   ? 'w-auto min-w-[40px] px-1.5 h-9 text-xs'
                   : 'w-9 h-9 text-sm';
-                // Rodyti pagrindinį stat'ą priklausomai nuo sort tipo
-                const primaryValue = companySort === 'avg'
-                  ? c.avgPoints.toFixed(1)
-                  : String(c.memberCount);
-                const primaryLabel = companySort === 'avg' ? 'vid.' : pluralizeLt(c.memberCount, ['dal.', 'dal.', 'dal.']);
                 return (
                   <div key={c.companyId}
                     className={`flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0 ${isMyCompany ? 'bg-[#54130E]/5' : ''}`}>
@@ -1807,15 +1825,12 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                         {c.companyName} {isMyCompany && <span className="text-[10px] ml-1 opacity-70">(tavo)</span>}
                       </div>
                       <div className="text-[10px] text-[#845641]">
-                        {companySort === 'avg'
-                          ? <>{c.memberCount} {pluralizeLt(c.memberCount, ['dalyvis', 'dalyviai', 'dalyvių'])} · {c.totalPoints} tšk. iš viso</>
-                          : <>vidurkis {c.avgPoints.toFixed(1)} tšk. · iš viso {c.totalPoints} tšk.</>
-                        }
+                        {c.memberCount} {pluralizeLt(c.memberCount, ['dalyvis', 'dalyviai', 'dalyvių'])} · {c.totalPoints} tšk. iš viso
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono font-bold text-[#54130E]">{primaryValue}</div>
-                      <div className="text-[9px] text-[#845641] uppercase tracking-wider">{primaryLabel}</div>
+                      <div className="font-mono font-bold text-[#54130E]">{c.avgPoints.toFixed(1)}</div>
+                      <div className="text-[9px] text-[#845641] uppercase tracking-wider">vid.</div>
                     </div>
                   </div>
                 );
