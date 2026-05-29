@@ -86,6 +86,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // === USERNAMES (unikalūs vartotojų vardai) ===
+    // Kiekvienas dokumentas - rezervacija: doc.id = username.toLowerCase().trim(), data = { uid }.
+    // Firestore atominis per-dokumento create garantuoja, kad du vartotojai negali užregistruoti
+    // to paties vardo (net jei abu bandys tuo pat metu).
+
+    match /usernames/{usernameLower} {
+      // Viešas skaityti - reikalinga anti-collision patikrai PRIEŠ registraciją (kai dar nėra auth)
+      allow read: if true;
+
+      // Kurti gali tik autentifikuotas vartotojas, ir tik su savo uid.
+      // Atominis Firestore unique key constraint užtikrina, kad rasta race condition'ai 1 laimi.
+      allow create: if isAuth() &&
+                       request.resource.data.keys().hasOnly(['uid']) &&
+                       request.resource.data.uid == request.auth.uid;
+
+      // Immutable - rezervacijos nekeičiamos ir netrinasi
+      allow update, delete: if false;
+    }
+
     // === USERS_PRIVATE (privatūs PII duomenys) ===
 
     match /users_private/{userId} {

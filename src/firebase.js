@@ -96,7 +96,41 @@ const AVATAR_COLORS = [
   '#B86344', // wood-ish brown
 ];
 
+// Normalizuotas vartotojo vardo key'as Firestore lookup'ams - case-insensitive, be tarpų.
+// „Paulius_Testas" ir „paulius_testas" laikomi tuo pačiu.
+const usernameKey = (u) => (u || '').trim().toLowerCase();
+
+// Patikrina, ar username dar laisvas (atskira funkcija - tinka greitam UX patikrinimui).
+export async function checkUsernameAvailable(username) {
+  const key = usernameKey(username);
+  if (!key || key.length < 3) return false;
+  try {
+    const snap = await getDoc(doc(db, 'usernames', key));
+    return !snap.exists();
+  } catch (_) {
+    // Network/permission klaida - leisti registracijai tęsti (atominis create patikrins galutinai)
+    return true;
+  }
+}
+
 export async function registerUser(email, password, username, fullName, companyId, companyName, companyCode) {
+  // PRE-CHECK: greitas vardo unikalumo patikrinimas prieš auth user kūrimą.
+  // Tai gražus UX - vartotojas iškart mato klaidą, nereikia laukti rollback'o.
+  const uKey = usernameKey(username);
+  if (!uKey || uKey.length < 3) {
+    throw new Error('Vartotojo vardas turi būti bent 3 simboliai');
+  }
+  try {
+    const existingSnap = await getDoc(doc(db, 'usernames', uKey));
+    if (existingSnap.exists()) {
+      throw new Error('Šis vartotojo vardas jau užimtas. Pasirink kitą.');
+    }
+  } catch (err) {
+    // Jei klaida yra mūsų throw'as, persiusti toliau
+    if (err.message && err.message.includes('užimtas')) throw err;
+    // Kitos klaidos (network, permission) - toleruoti, atominis create patikrins galutinai
+  }
+
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const uid = cred.user.uid;
 
@@ -129,15 +163,25 @@ export async function registerUser(email, password, username, fullName, companyI
       createdAt: serverTimestamp(),
     });
 
+    // ATOMINIS USERNAME REZERVAVIMAS - garantuoja unikalumą per visą sistemą.
+    // Jei tarpe tarp pre-check ir šito create kažkas spėjo užimti vardą,
+    // šis setDoc nepavyks (Firestore atominis per-doc create).
+    await setDoc(doc(db, 'usernames', uKey), { uid });
+
     return cred.user;
   } catch (err) {
-    // Rollback: pašalinti dalinai sukurtą Firestore profilį + auth user'į
+    // Rollback: pašalinti dalinai sukurtus Firestore įrašus + auth user'į
     try { await deleteDoc(doc(db, 'users', uid)); } catch (_) {}
     try { await deleteDoc(doc(db, 'users_private', uid)); } catch (_) {}
+    try { await deleteDoc(doc(db, 'usernames', uKey)); } catch (_) {}
     try {
       await deleteUser(cred.user);
     } catch (_) {
       // Jei rollback'as nepavyko (pvz., reikia reauth), tylim - originali klaida svarbesnė
+    }
+    // Jei klaida buvo specifiškai dėl username konflikto - graziai parodyti
+    if (err.code === 'permission-denied' || err.code === 'already-exists') {
+      throw new Error('Šis vartotojo vardas jau užimtas. Pasirink kitą.');
     }
     throw err;
   }
@@ -161,6 +205,23 @@ export async function getUserProfile(uid) {
   const publicSnap = await getDoc(doc(db, 'users', uid));
   if (!publicSnap.exists()) return null;
   const publicData = publicSnap.data();
+
+  // SELF-HEAL: esamiems vartotojams (prieš username unikalumo sistemą) sukurti rezervaciją.
+  // Idempotent - bandoma kiekvieno login'o metu, jei rezervacijos jau yra - tyliai praeina.
+  // Race-safe: kiekvienas vartotojas rašo tik savo įrašą.
+  if (publicData.username) {
+    const uKey = usernameKey(publicData.username);
+    if (uKey && uKey.length >= 3) {
+      try {
+        const resSnap = await getDoc(doc(db, 'usernames', uKey));
+        if (!resSnap.exists()) {
+          await setDoc(doc(db, 'usernames', uKey), { uid });
+        }
+      } catch (_) {
+        // Tylim - jei ką tik kažkas spėjo pasiimti tą vardą, problema bus tik konkurentui
+      }
+    }
+  }
 
   // Skaityti privatų doc'ą (email/fullName). Owner gali skaityti pagal Firestore Rules.
   let privateData = {};
