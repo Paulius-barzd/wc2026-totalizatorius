@@ -1013,9 +1013,44 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
 // ============================================================
 
 const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScreen, onUpdatePrediction }) => {
-  const sortedUsers = [...usersWithPoints].sort((a, b) => b.points - a.points);
+  const [lbTab, setLbTab] = useState('all'); // 'all' | 'companies' | 'mine'
+
+  const sortedUsers = useMemo(
+    () => [...usersWithPoints].sort((a, b) => b.points - a.points),
+    [usersWithPoints]
+  );
   const me = sortedUsers.find((u) => u.uid === userProfile.uid) || userProfile;
   const myRank = sortedUsers.findIndex((u) => u.uid === userProfile.uid) + 1;
+
+  // Mano įmonės dalyviai + mano vieta jose
+  const myCompanyUsers = useMemo(() => {
+    if (!userProfile.companyId) return [];
+    return sortedUsers.filter((u) => u.companyId === userProfile.companyId);
+  }, [sortedUsers, userProfile.companyId]);
+  const myCompanyRank = myCompanyUsers.findIndex((u) => u.uid === userProfile.uid) + 1;
+
+  // Įmonių statistika (vidurkis vienam dalyviui)
+  const companyStats = useMemo(() => {
+    const stats = {};
+    sortedUsers.forEach((u) => {
+      if (!u.companyId) return;
+      if (!stats[u.companyId]) {
+        stats[u.companyId] = {
+          companyId: u.companyId,
+          companyName: u.companyName || 'Nežinoma',
+          companyCode: u.companyCode || null,
+          memberCount: 0,
+          totalPoints: 0,
+        };
+      }
+      stats[u.companyId].memberCount++;
+      stats[u.companyId].totalPoints += u.points || 0;
+    });
+    return Object.values(stats)
+      .map((s) => ({ ...s, avgPoints: s.memberCount > 0 ? s.totalPoints / s.memberCount : 0 }))
+      .sort((a, b) => b.avgPoints - a.avgPoints);
+  }, [sortedUsers]);
+
   const upcomingMatches = matches.filter((m) => m.status === 'upcoming').slice(0, 6);
   const liveMatches = matches.filter((m) => m.status === 'live');
 
@@ -1039,27 +1074,86 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
     </div>
   );
 
+  // Lyderlentės sekcija - 3 tabs (Bendra / Įmonės / Mano įmonė)
+  const lbTabs = [
+    { id: 'all', label: 'Bendra' },
+    { id: 'companies', label: 'Įmonės' },
+    { id: 'mine', label: 'Mano įmonė', disabled: !userProfile.companyId },
+  ];
+
+  const renderUserRow = (u, i) => {
+    const isMe = u.uid === userProfile.uid;
+    return (
+      <div key={u.uid}
+        className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${isMe ? 'bg-[#54130E]/8' : 'hover:bg-[#441514]/5'}`}>
+        <div className="font-display text-xl w-6 text-center"
+          style={{ color: i === 0 ? '#D1A974' : i === 1 ? '#A88A6F' : i === 2 ? '#845641' : '#A88A6F' }}>
+          {i + 1}
+        </div>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center font-display text-sm flex-shrink-0"
+          style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
+          {u.avatarLetter}
+        </div>
+        <div className="flex-1 text-sm font-semibold text-[#441514] truncate">
+          {u.username}{isMe && <span className="text-[10px] ml-1 opacity-70">(tu)</span>}
+        </div>
+        <div className="font-mono font-bold text-[#54130E]">{u.points}</div>
+      </div>
+    );
+  };
+
+  const renderCompanyRow = (c, i) => {
+    const abbrev = companyAbbreviation({ name: c.companyName, code: c.companyCode });
+    return (
+      <div key={c.companyId}
+        className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${c.companyId === userProfile.companyId ? 'bg-[#54130E]/8' : 'hover:bg-[#441514]/5'}`}>
+        <div className="font-display text-xl w-6 text-center"
+          style={{ color: i === 0 ? '#D1A974' : i === 1 ? '#A88A6F' : i === 2 ? '#845641' : '#A88A6F' }}>
+          {i + 1}
+        </div>
+        <div className="min-w-[40px] h-8 px-2 rounded-lg flex items-center justify-center font-display font-mono text-xs bg-[#54130E]/10 text-[#54130E] flex-shrink-0">
+          {abbrev}
+        </div>
+        <div className="flex-1 text-sm font-semibold text-[#441514] truncate">
+          {c.companyName}
+        </div>
+        <div className="font-mono font-bold text-[#54130E]">{c.avgPoints.toFixed(1)}</div>
+      </div>
+    );
+  };
+
   const leaderboardSection = sortedUsers.length > 0 && (
     <div>
       <div className="flex items-center gap-2 mb-3">
         <Crown className="w-4 h-4 text-[#D1A974]" />
         <h2 className="font-display text-sm uppercase tracking-wider text-[#441514]">Lyderiai</h2>
       </div>
-      <div className="card-light rounded-xl p-2">
-        {sortedUsers.slice(0, 5).map((u, i) => (
-          <div key={u.uid} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#441514]/5 transition-colors">
-            <div className="font-display text-xl w-6 text-center"
-              style={{ color: i === 0 ? '#D1A974' : i === 1 ? '#A88A6F' : i === 2 ? '#845641' : '#A88A6F' }}>
-              {i + 1}
-            </div>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center font-display text-sm"
-              style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
-              {u.avatarLetter}
-            </div>
-            <div className="flex-1 text-sm font-semibold text-[#441514] truncate">{u.username}</div>
-            <div className="font-mono font-bold text-[#54130E]">{u.points}</div>
-          </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl bg-[#441514]/5 mb-2">
+        {lbTabs.map((t) => (
+          <button key={t.id}
+            onClick={() => !t.disabled && setLbTab(t.id)}
+            disabled={t.disabled}
+            style={lbTab === t.id ? { backgroundColor: '#FFFFFF', color: '#441514' } : { color: '#845641' }}
+            className="flex-1 py-1.5 px-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+            {t.label}
+          </button>
         ))}
+      </div>
+
+      <div className="card-light rounded-xl p-2">
+        {lbTab === 'all' && sortedUsers.slice(0, 5).map((u, i) => renderUserRow(u, i))}
+        {lbTab === 'companies' && (
+          companyStats.length > 0
+            ? companyStats.slice(0, 5).map((c, i) => renderCompanyRow(c, i))
+            : <p className="text-xs text-[#845641] text-center py-3">Įmonių dar nėra</p>
+        )}
+        {lbTab === 'mine' && (
+          myCompanyUsers.length > 0
+            ? myCompanyUsers.slice(0, 5).map((u, i) => renderUserRow(u, i))
+            : <p className="text-xs text-[#845641] text-center py-3">Tu nepriklausai įmonei</p>
+        )}
       </div>
     </div>
   );
@@ -1083,7 +1177,7 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-white/15">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-white/15">
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Taškai</div>
             <div className="font-display text-2xl lg:text-3xl">{me.points || 0}</div>
@@ -1091,6 +1185,12 @@ const HomeScreen = ({ userProfile, usersWithPoints, matches, predictions, setScr
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Vieta</div>
             <div className="font-display text-2xl lg:text-3xl">#{myRank || '-'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Įmonėje</div>
+            <div className="font-display text-2xl lg:text-3xl">
+              {myCompanyRank > 0 ? `#${myCompanyRank}` : '—'}
+            </div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider mb-1 opacity-60">Serija</div>
@@ -1408,6 +1508,7 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
 
 const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   const [tab, setTab] = useState('overall'); // 'overall' | 'company' | 'companies'
+  const [companySort, setCompanySort] = useState('avg'); // 'avg' | 'members'
 
   const sortedUsers = useMemo(
     () => [...usersWithPoints].sort((a, b) => b.points - a.points),
@@ -1442,9 +1543,14 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
       memberCount: s.members.length,
       avgPoints: s.members.length > 0 ? s.totalPoints / s.members.length : 0,
     }));
-    arr.sort((a, b) => b.avgPoints - a.avgPoints);
+    // Rūšiavimas pagal companySort: 'avg' (vidurkis) arba 'members' (dalyvių sk.)
+    if (companySort === 'members') {
+      arr.sort((a, b) => b.memberCount - a.memberCount || b.avgPoints - a.avgPoints);
+    } else {
+      arr.sort((a, b) => b.avgPoints - a.avgPoints);
+    }
     return arr;
-  }, [sortedUsers]);
+  }, [sortedUsers, companySort]);
 
   const tabs = [
     { id: 'overall', label: 'Bendra' },
@@ -1581,6 +1687,18 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         </div>
       </div>
 
+      {/* Shortcut mygtukas - jei daugiau nei viena įmonė, pasiūlyti rūšiavimą pagal dydį */}
+      {totalCompaniesCount > 1 && (
+        <button
+          onClick={() => { setTab('companies'); setCompanySort('members'); }}
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#FFFFFF' }}
+          className="w-full py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md transition-all duration-200 hover:scale-[1.01] hover:brightness-110 hover:shadow-lg active:scale-[0.99] flex items-center justify-center gap-2">
+          <Shield className="w-4 h-4" />
+          Dalyvių skaičius pagal įmones
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl bg-[#441514]/5 lg:max-w-md">
         {tabs.map((t) => (
@@ -1636,10 +1754,27 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
       {/* TAB: ĮMONĖS */}
       {tab === 'companies' && (
         <>
+          {/* Sort toggle: pagal vidurkį / pagal dalyvių sk. */}
+          <div className="flex gap-1 p-1 rounded-xl bg-[#441514]/5 lg:max-w-xs">
+            <button onClick={() => setCompanySort('avg')}
+              style={companySort === 'avg' ? { backgroundColor: '#FFFFFF', color: '#441514' } : { color: '#845641' }}
+              className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all">
+              Pagal vidurkį
+            </button>
+            <button onClick={() => setCompanySort('members')}
+              style={companySort === 'members' ? { backgroundColor: '#FFFFFF', color: '#441514' } : { color: '#845641' }}
+              className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all">
+              Pagal dydį
+            </button>
+          </div>
+
           <div className="rounded-xl p-3 bg-[#54130E]/5 border border-[#54130E]/15">
             <p className="text-[11px] text-[#54130E] leading-relaxed">
-              <span className="font-bold">Kaip skaičiuojama:</span> įmonės rikiuojamos pagal taškų <span className="font-bold">vidurkį vienam dalyviui</span>.
-              Taip mažos įmonės gali sąžiningai konkuruoti su didelėmis - dydis nesuteikia pranašumo.
+              <span className="font-bold">Kaip skaičiuojama:</span>{' '}
+              {companySort === 'avg'
+                ? <>įmonės rikiuojamos pagal taškų <span className="font-bold">vidurkį vienam dalyviui</span>. Taip mažos įmonės gali sąžiningai konkuruoti su didelėmis — dydis nesuteikia pranašumo.</>
+                : <>įmonės rikiuojamos pagal <span className="font-bold">dalyvių skaičių</span>. Rodo, kuri įmonė atvedė daugiausiai žaidėjų.</>
+              }
             </p>
           </div>
 
@@ -1655,6 +1790,11 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                 const iconClass = abbrev.length > 2
                   ? 'w-auto min-w-[40px] px-1.5 h-9 text-xs'
                   : 'w-9 h-9 text-sm';
+                // Rodyti pagrindinį stat'ą priklausomai nuo sort tipo
+                const primaryValue = companySort === 'avg'
+                  ? c.avgPoints.toFixed(1)
+                  : String(c.memberCount);
+                const primaryLabel = companySort === 'avg' ? 'vid.' : pluralizeLt(c.memberCount, ['dal.', 'dal.', 'dal.']);
                 return (
                   <div key={c.companyId}
                     className={`flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0 ${isMyCompany ? 'bg-[#54130E]/5' : ''}`}>
@@ -1667,12 +1807,15 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                         {c.companyName} {isMyCompany && <span className="text-[10px] ml-1 opacity-70">(tavo)</span>}
                       </div>
                       <div className="text-[10px] text-[#845641]">
-                        {c.memberCount} {pluralizeLt(c.memberCount, ['dalyvis', 'dalyviai', 'dalyvių'])} · {c.totalPoints} tšk. iš viso
+                        {companySort === 'avg'
+                          ? <>{c.memberCount} {pluralizeLt(c.memberCount, ['dalyvis', 'dalyviai', 'dalyvių'])} · {c.totalPoints} tšk. iš viso</>
+                          : <>vidurkis {c.avgPoints.toFixed(1)} tšk. · iš viso {c.totalPoints} tšk.</>
+                        }
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono font-bold text-[#54130E]">{c.avgPoints.toFixed(1)}</div>
-                      <div className="text-[9px] text-[#845641] uppercase tracking-wider">vid.</div>
+                      <div className="font-mono font-bold text-[#54130E]">{primaryValue}</div>
+                      <div className="text-[9px] text-[#845641] uppercase tracking-wider">{primaryLabel}</div>
                     </div>
                   </div>
                 );
@@ -2489,7 +2632,7 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
     return (
       <div className="space-y-4 pb-24 lg:pb-8">
         <div>
-          <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRINTAMOSIOS VARŽYBOS</h1>
+          <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRINTAMŲJŲ ETAPAS</h1>
           <p className="text-sm text-[#845641]">1/16 finalas · Aštuntfinalis · ... · Finalas</p>
         </div>
         <div className="card-light rounded-xl p-6 text-center">
@@ -2504,7 +2647,7 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
   return (
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRITIMO ETAPAS</h1>
+        <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">ATKRINTAMŲJŲ ETAPAS</h1>
         <p className="text-sm text-[#845641]">{knockoutMatches.length} rungtynių · spėk visus etapus</p>
       </div>
 
