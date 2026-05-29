@@ -3603,12 +3603,13 @@ export default function App() {
     <div className="app-bg font-body text-[#441514]">
       <Styles />
       <div className="max-w-md lg:max-w-5xl mx-auto min-h-screen flex flex-col">
-        <header className="sticky top-0 z-40 glass-light px-4 py-3 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between gap-4 shadow-md"
+          style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #845641 50%, #5C3E2E 100%)' }}>
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <Emblem className="w-9 h-9" variant="light" />
+            <Emblem className="w-10 h-10" variant="dark" />
             <div>
-              <div className="font-display text-sm text-[#441514] leading-none tracking-wide">PFČ 2026</div>
-              <div className="text-[9px] text-[#845641] uppercase tracking-widest mt-0.5">Totalizatorius</div>
+              <div className="font-display text-sm text-white leading-none tracking-wide">PFČ 2026</div>
+              <div className="text-[9px] uppercase tracking-widest mt-0.5" style={{ color: '#D1A974' }}>Totalizatorius</div>
             </div>
           </div>
 
@@ -3619,10 +3620,10 @@ export default function App() {
               const active = screen === item.id;
               return (
                 <button key={item.id} onClick={() => setScreen(item.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 hover:scale-[1.03] ${
                     active
-                      ? 'bg-[#54130E]/10 text-[#54130E]'
-                      : 'text-[#845641] hover:text-[#441514] hover:bg-[#441514]/5'
+                      ? 'bg-white/15 text-white shadow-inner'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}>
                   <Icon className="w-4 h-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">{item.label}</span>
@@ -3632,8 +3633,8 @@ export default function App() {
           </nav>
 
           <button onClick={() => setScreen('profile')}
-            className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm transition-transform hover:scale-105 bg-white flex-shrink-0"
-            style={{ color: userProfile.avatarColor, border: `1.5px solid ${userProfile.avatarColor}80` }}>
+            className="w-10 h-10 rounded-full flex items-center justify-center font-display text-sm transition-all duration-200 hover:scale-110 bg-white shadow-md flex-shrink-0"
+            style={{ color: userProfile.avatarColor, border: `2px solid #D1A974` }}>
             {userProfile.avatarLetter}
           </button>
         </header>
@@ -3656,19 +3657,24 @@ export default function App() {
             onLogout={handleLogout} onOpenAdmin={() => setScreen('admin')} />}
         </main>
 
-        {/* Mobile bottom nav - desktop'e paslėpta (header'io tabs naudojami) */}
-        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-light px-1 py-2 z-30 lg:hidden">
-          <div className="grid grid-cols-7 gap-0.5">
+        {/* Mobile bottom nav - horizontaliai slenkantis su didesniais mygtukais.
+            Desktop'e paslėpta (header'io tabs naudojami). */}
+        <nav className="fixed bottom-0 left-0 right-0 z-30 lg:hidden shadow-[0_-4px_12px_rgba(68,21,20,0.08)]"
+          style={{ background: 'linear-gradient(180deg, #FFFFFF 0%, #FAF6EF 100%)', borderTop: '1px solid rgba(132, 86, 65, 0.15)' }}>
+          <div className="flex overflow-x-auto scrollbar-hide px-2 py-2 gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = screen === item.id;
               return (
                 <button key={item.id} onClick={() => setScreen(item.id)}
-                  className={`flex flex-col items-center gap-0.5 py-1.5 rounded-lg transition-colors ${
-                    active ? 'text-[#54130E]' : 'text-[#845641] hover:text-[#441514]'
+                  style={active ? { background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#FFFFFF' } : {}}
+                  className={`flex flex-col items-center justify-center gap-1 min-w-[72px] flex-shrink-0 px-3 py-2 rounded-xl transition-all duration-200 hover:scale-[1.05] active:scale-[0.95] ${
+                    active ? 'shadow-md' : 'text-[#845641] hover:text-[#441514] hover:bg-[#845641]/10'
                   }`}>
-                  <Icon className="w-4 h-4" />
-                  <span className="text-[8px] font-bold uppercase tracking-wide leading-tight text-center">{item.label}</span>
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-wide leading-tight text-center whitespace-nowrap">
+                    {item.label}
+                  </span>
                 </button>
               );
             })}
