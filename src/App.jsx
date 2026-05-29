@@ -198,8 +198,9 @@ const translateAuthError = (code) => {
     'auth/invalid-email': 'Neteisingas el. pašto formatas',
     'auth/email-already-in-use': 'Šis el. paštas jau užregistruotas',
     'auth/weak-password': 'Per silpnas slaptažodis (bent 8 simboliai, su raide ir skaičiumi)',
-    'auth/user-not-found': 'Toks vartotojas nerastas',
-    'auth/wrong-password': 'Neteisingas slaptažodis',
+    // Anti-enumeration: nesakome ar paskyra egzistuoja - tas pats pranešimas abiem atvejais
+    'auth/user-not-found': 'Neteisingas el. paštas arba slaptažodis',
+    'auth/wrong-password': 'Neteisingas el. paštas arba slaptažodis',
     'auth/invalid-credential': 'Neteisingas el. paštas arba slaptažodis',
     'auth/too-many-requests': 'Per daug bandymų - palaukite kelias minutes',
     'auth/network-request-failed': 'Nepavyko prisijungti prie tinklo',

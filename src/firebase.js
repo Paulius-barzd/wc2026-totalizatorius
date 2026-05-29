@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -38,12 +39,47 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
+
+// Firebase App Check - apsauga nuo bot'ų / curl'ų / spoofed klientų.
+// Gracefully degrades: jei VITE_RECAPTCHA_SITE_KEY nepateiktas, App Check tiesiog nepasileidžia
+// (tinka development'ui ir pirmam deploy'ui prieš sukonfigūruojant Firebase Console pusėje).
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (recaptchaSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    console.warn('App Check init failed:', err);
+  }
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 // Turnyro pradžios timestamp - po šio momento tournamentBets nebegalima keisti.
 // Turi sutapti su firestore.rules patikra (timestamp.date(2026, 6, 11) = 2026-06-11 00:00 UTC).
 export const TOURNAMENT_LOCK_TIME = new Date('2026-06-11T00:00:00Z').getTime();
+
+// === AUDIT LOG ===
+// Įrašo svarbų admin veiksmą į audit_log kolekciją. Nepertraukia pagrindinės operacijos
+// jei logo įrašymas nepavyko (geriau veikti su sumažintu logu nei užblokuoti veiksmą).
+async function logAudit(action, targetId, details) {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await addDoc(collection(db, 'audit_log'), {
+      actorUid: user.uid,
+      action: String(action).slice(0, 100),
+      targetId: targetId ? String(targetId).slice(0, 200) : null,
+      details: details || null,
+      timestamp: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('Audit log write failed:', err.code || err.message);
+  }
+}
 
 // === AUTH HELPERS ===
 
@@ -181,15 +217,23 @@ export function savePrediction(uid, matchId, home, away) {
 
 const RESULTS_DOC_ID = 'wc2026';
 
-export function saveTournamentResults(data) {
-  return setDoc(doc(db, 'tournamentResults', RESULTS_DOC_ID), {
+export async function saveTournamentResults(data) {
+  const payload = {
     champion: data.champion || null,
     bestPlayer: (data.bestPlayer || '').trim(),
     topScorer: (data.topScorer || '').trim(),
     bestGoalkeeper: (data.bestGoalkeeper || '').trim(),
     bestYoungPlayer: (data.bestYoungPlayer || '').trim(),
     updatedAt: serverTimestamp(),
-  }, { merge: true });
+  };
+  await setDoc(doc(db, 'tournamentResults', RESULTS_DOC_ID), payload, { merge: true });
+  await logAudit('saveTournamentResults', RESULTS_DOC_ID, {
+    champion: payload.champion,
+    bestPlayer: payload.bestPlayer,
+    topScorer: payload.topScorer,
+    bestGoalkeeper: payload.bestGoalkeeper,
+    bestYoungPlayer: payload.bestYoungPlayer,
+  });
 }
 
 export function listenToTournamentResults(callback) {
@@ -298,7 +342,10 @@ export async function migrateUsersToPrivateSchema() {
     migrated++;
   }
 
-  if (migrated > 0) await batch.commit();
+  if (migrated > 0) {
+    await batch.commit();
+    await logAudit('migrateUsersToPrivateSchema', null, { migrated });
+  }
   return migrated;
 }
 
@@ -323,8 +370,9 @@ export function listenToAllTournamentBets(callback) {
 
 // === ADMIN FUNCTIONS ===
 
-export function updateMatch(matchId, updates) {
-  return setDoc(doc(db, 'matches', matchId), updates, { merge: true });
+export async function updateMatch(matchId, updates) {
+  await setDoc(doc(db, 'matches', matchId), updates, { merge: true });
+  await logAudit('updateMatch', matchId, updates);
 }
 
 // === COMPANIES (admin) ===
@@ -339,11 +387,13 @@ function normalizeCompanyCode(code) {
 export async function createCompany(name, code) {
   const trimmedName = (name || '').trim();
   if (!trimmedName) throw new Error('Įmonės pavadinimas negali būti tuščias');
+  const normalizedCode = normalizeCompanyCode(code);
   const ref = await addDoc(collection(db, 'companies'), {
     name: trimmedName,
-    code: normalizeCompanyCode(code),
+    code: normalizedCode,
     createdAt: serverTimestamp(),
   });
+  await logAudit('createCompany', ref.id, { name: trimmedName, code: normalizedCode });
   return ref.id;
 }
 
@@ -359,6 +409,7 @@ export async function updateCompany(companyId, name, code) {
   // Sinchronizuoti companyName + companyCode visiems šios įmonės vartotojams
   const q = query(collection(db, 'users'), where('companyId', '==', companyId));
   const snap = await getDocs(q);
+  let synced = 0;
   if (!snap.empty) {
     const batch = writeBatch(db);
     snap.forEach((u) => batch.update(doc(db, 'users', u.id), {
@@ -366,7 +417,9 @@ export async function updateCompany(companyId, name, code) {
       companyCode: normalizedCode,
     }));
     await batch.commit();
+    synced = snap.size;
   }
+  await logAudit('updateCompany', companyId, { name: trimmedName, code: normalizedCode, syncedUsers: synced });
 }
 
 // Ištrinti įmonę galima tik jei joje nėra vartotojų.
@@ -377,17 +430,24 @@ export async function deleteCompany(companyId) {
     throw new Error(`Negalima ištrinti - įmonė turi ${snap.size} dalyvių. Pirma juos perskirk.`);
   }
   await deleteDoc(doc(db, 'companies', companyId));
+  await logAudit('deleteCompany', companyId);
 }
 
 // === USER ADMIN TEISĖS ===
 
-export function setUserAdmin(uid, isAdmin) {
-  return updateDoc(doc(db, 'users', uid), { isAdmin: Boolean(isAdmin) });
+export async function setUserAdmin(uid, isAdmin) {
+  await updateDoc(doc(db, 'users', uid), { isAdmin: Boolean(isAdmin) });
+  await logAudit('setUserAdmin', uid, { isAdmin: Boolean(isAdmin) });
 }
 
 // Pakeisti vartotojo įmonę (perskirti į kitą arba pašalinti)
-export function setUserCompany(uid, companyId, companyName, companyCode) {
-  return updateDoc(doc(db, 'users', uid), {
+export async function setUserCompany(uid, companyId, companyName, companyCode) {
+  await updateDoc(doc(db, 'users', uid), {
+    companyId: companyId || null,
+    companyName: companyName || null,
+    companyCode: companyCode || null,
+  });
+  await logAudit('setUserCompany', uid, {
     companyId: companyId || null,
     companyName: companyName || null,
     companyCode: companyCode || null,
@@ -414,6 +474,7 @@ export async function seedDemoMatches() {
     batch.set(ref, m);
   });
   await batch.commit();
+  await logAudit('seedDemoMatches', null, { count: matches.length });
 }
 
 // === TIKROS 2026 PASAULIO ČEMPIONATO RUNGTYNĖS ===
@@ -524,17 +585,18 @@ export async function seedWC2026Matches() {
     batch.set(ref, m);
   });
   await batch.commit();
+  await logAudit('seedWC2026Matches', null, { count: matches.length });
   return matches.length;
 }
 
 // === IŠTRINTI DEMO RUNGTYNES ===
 // Naudinga, jei sukurtos demo rungtynės m1-m8 (kurios neturi tikrų komandų)
 export async function deleteDemoMatches() {
+  const ids = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
   const batch = writeBatch(db);
-  ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'].forEach((id) => {
-    batch.delete(doc(db, 'matches', id));
-  });
+  ids.forEach((id) => batch.delete(doc(db, 'matches', id)));
   await batch.commit();
+  await logAudit('deleteDemoMatches', null, { ids });
 }
 
 // === PFČ 2026 KNOCKOUT ETAPO STRUKTŪRA ===
@@ -594,6 +656,7 @@ export async function seedKnockoutStructure() {
   const batch = writeBatch(db);
   matches.forEach((m) => batch.set(doc(db, 'matches', m.id), m));
   await batch.commit();
+  await logAudit('seedKnockoutStructure', null, { count: matches.length });
   return matches.length;
 }
 

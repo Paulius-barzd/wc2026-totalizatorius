@@ -27,12 +27,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/matches/$(matchId)).data.status;
     }
 
-    // Patikrina, ar lauko reikšmė yra teisingas sveikas skaičius nuo 0 iki maxVal
     function isValidScore(v, maxVal) {
       return v is int && v >= 0 && v <= maxVal;
     }
 
-    // Patikrina, ar string'as nėra per ilgas (apsauga nuo DoS / abuse)
     function isReasonableString(v, maxLen) {
       return v is string && v.size() <= maxLen;
     }
@@ -45,94 +43,104 @@ service cloud.firestore {
       // Visi prisijungę gali skaityti profilius (reikalinga lyderlentei)
       allow read: if isAuth();
 
-      // Tik vartotojas gali sukurti SAVO profilį
-      // KRITIŠKA: isAdmin turi būti false (negali pats save padaryti admin'u)
+      // Tik vartotojas gali sukurti SAVO profilį.
+      // Field allowlist + isAdmin must be false + uid must match path.
       allow create: if isOwner(userId) &&
+                       request.resource.data.keys().hasOnly([
+                         'uid', 'username', 'avatarLetter', 'avatarColor',
+                         'companyId', 'companyName', 'companyCode',
+                         'isAdmin', 'createdAt'
+                       ]) &&
                        request.resource.data.isAdmin == false &&
-                       request.resource.data.uid == userId;
+                       request.resource.data.uid == userId &&
+                       isReasonableString(request.resource.data.username, 50) &&
+                       request.resource.data.username.size() >= 3;
 
-      // Vartotojas gali atnaujinti savo profilį, BET NE pakeisti isAdmin/company/companyCode
-      // Admin teisės ir įmonė keičiamos tik per admin'ą arba Firebase Console
+      // Owner update: griežtai apriboti - tik avatarColor ir avatarLetter gali keisti.
+      // Username NEKEIČIAMAS (impersonation prevention).
+      // company* / isAdmin / createdAt / uid - immutable.
       allow update: if isOwner(userId) &&
-                       request.resource.data.isAdmin == resource.data.isAdmin &&
+                       request.resource.data.keys().hasOnly([
+                         'uid', 'username', 'avatarLetter', 'avatarColor',
+                         'companyId', 'companyName', 'companyCode',
+                         'isAdmin', 'createdAt'
+                       ]) &&
+                       request.resource.data.uid == resource.data.uid &&
+                       request.resource.data.username == resource.data.username &&
                        request.resource.data.companyId == resource.data.companyId &&
                        request.resource.data.companyName == resource.data.companyName &&
-                       request.resource.data.companyCode == resource.data.companyCode;
+                       request.resource.data.companyCode == resource.data.companyCode &&
+                       request.resource.data.isAdmin == resource.data.isAdmin &&
+                       request.resource.data.createdAt == resource.data.createdAt;
 
-      // Admin gali keisti bet ką (įskaitant kitų vartotojų įmonę, isAdmin teises)
-      allow update: if isAdmin();
+      // Admin gali keisti kitų vartotojų isAdmin/company - bet vis tiek su field allowlist
+      allow update: if isAdmin() &&
+                       request.resource.data.keys().hasOnly([
+                         'uid', 'username', 'avatarLetter', 'avatarColor',
+                         'companyId', 'companyName', 'companyCode',
+                         'isAdmin', 'createdAt'
+                       ]) &&
+                       request.resource.data.uid == resource.data.uid;
 
       // Trinti negalima
       allow delete: if false;
     }
 
     // === USERS_PRIVATE (privatūs PII duomenys) ===
-    // Email ir fullName - rodyti tik savininkui (arba admin'ui dėl valdymo)
 
     match /users_private/{userId} {
-      // Tik savininkas mato SAVO privačius duomenis. Admin'as taip pat (vartotojų valdymas).
       allow read: if isOwner(userId) || isAdmin();
 
-      // Tik savininkas gali sukurti SAVO private doc registracijos metu
       allow create: if isOwner(userId) &&
+                       request.resource.data.keys().hasOnly(['uid', 'email', 'fullName', 'createdAt', 'migratedAt']) &&
                        request.resource.data.uid == userId &&
                        (request.resource.data.email == null ||
                         isReasonableString(request.resource.data.email, 320)) &&
                        (request.resource.data.fullName == null ||
                         isReasonableString(request.resource.data.fullName, 200));
 
-      // Savininkas gali atnaujinti savo email/fullName
-      allow update: if isOwner(userId) &&
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       request.resource.data.keys().hasOnly(['uid', 'email', 'fullName', 'createdAt', 'migratedAt']) &&
+                       request.resource.data.uid == resource.data.uid &&
                        (request.resource.data.email == null ||
                         isReasonableString(request.resource.data.email, 320)) &&
                        (request.resource.data.fullName == null ||
                         isReasonableString(request.resource.data.fullName, 200));
 
-      // Admin taip pat gali atnaujinti (pvz., migracijai)
-      allow update: if isAdmin();
-
-      // Trinti negalima
       allow delete: if false;
     }
 
     // === COMPANIES ===
-    // Įmonių sąrašas registracijos dropdown'ui
 
     match /companies/{companyId} {
-      // Vieša skaityti (reikalinga registracijos formoje prieš autentifikaciją)
       allow read: if true;
 
-      // Tik admin gali kurti/keisti/trinti įmones, su validacija
       allow create: if isAdmin() &&
+                       request.resource.data.keys().hasOnly(['name', 'code', 'createdAt']) &&
                        isReasonableString(request.resource.data.name, 100) &&
                        (request.resource.data.code == null ||
                         isReasonableString(request.resource.data.code, 6));
+
       allow update: if isAdmin() &&
+                       request.resource.data.keys().hasOnly(['name', 'code', 'createdAt']) &&
                        isReasonableString(request.resource.data.name, 100) &&
                        (request.resource.data.code == null ||
                         isReasonableString(request.resource.data.code, 6));
+
       allow delete: if isAdmin();
     }
 
     // === MATCHES ===
-    // Rungtynių sąrašas
+    // Admin only - mažiau griežtas field check, nes admin'as turi platų valdymą
 
     match /matches/{matchId} {
-      // Visi prisijungę mato rungtynes
       allow read: if isAuth();
-
-      // Tik admin gali kurti/modifikuoti/trinti rungtynes
       allow write: if isAdmin();
     }
 
     // === PREDICTIONS ===
-    // Vartotojų prognozės
 
     match /predictions/{predId} {
-      // Skaityti gali:
-      // 1) Pats vartotojas savo prognozes
-      // 2) Admin - visas prognozes
-      // 3) Visi - po rungtynių pradžios (statistikai)
       allow read: if isAuth() && (
         resource.data.userId == request.auth.uid ||
         isAdmin() ||
@@ -140,38 +148,32 @@ service cloud.firestore {
          matchStatus(resource.data.matchId) != 'upcoming')
       );
 
-      // Sukurti naują prognozę:
-      // - Tik savo (userId turi sutapti su request.auth.uid)
-      // - Tik jei rungtynės dar neprasidėjo (status == 'upcoming')
-      // - home/away turi būti sveikas skaičius 0-20 (apsauga nuo abuse)
       allow create: if isOwner(request.resource.data.userId) &&
                        matchExists(request.resource.data.matchId) &&
                        matchStatus(request.resource.data.matchId) == 'upcoming' &&
+                       request.resource.data.keys().hasOnly(['userId', 'matchId', 'home', 'away', 'submittedAt']) &&
                        isValidScore(request.resource.data.home, 20) &&
                        isValidScore(request.resource.data.away, 20);
 
-      // Atnaujinti prognozę:
-      // - Tik savo
-      // - Tik jei rungtynės dar neprasidėjo
-      // - userId nekeičiamas
-      // - home/away validuojami
       allow update: if isOwner(resource.data.userId) &&
                        matchStatus(resource.data.matchId) == 'upcoming' &&
+                       request.resource.data.keys().hasOnly(['userId', 'matchId', 'home', 'away', 'submittedAt']) &&
                        request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.matchId == resource.data.matchId &&
                        isValidScore(request.resource.data.home, 20) &&
                        isValidScore(request.resource.data.away, 20);
 
-      // Trinti gali tik admin
       allow delete: if isAdmin();
     }
 
     // === TOURNAMENT RESULTS ===
-    // Realūs turnyro laimėtojai (admin įveda po turnyro pabaigos).
 
     match /tournamentResults/{resultId} {
       allow read: if isAuth();
-      // Admin'as įveda - validuojam ilgius (apsauga nuo abuse)
       allow write: if isAdmin() &&
+                      request.resource.data.keys().hasOnly([
+                        'champion', 'bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer', 'updatedAt'
+                      ]) &&
                       (request.resource.data.champion == null ||
                        isReasonableString(request.resource.data.champion, 10)) &&
                       isReasonableString(request.resource.data.bestPlayer, 200) &&
@@ -181,15 +183,14 @@ service cloud.firestore {
     }
 
     // === TOURNAMENT BETS ===
-    // Turnyro lygio prognozės (čempionas, strielcas, grupių nugalėtojai)
 
     match /tournamentBets/{userId} {
       allow read: if isAuth();
 
-      // Tik savininkas gali rašyti, IR tik iki turnyro pradžios.
-      // 2026-06-11 00:00 UTC = 2026-06-11 03:00 LT (pirma rungtynė 22:00 LT).
-      // Plius validuojami string ilgiai (apsauga nuo DoS - 100,000 char vardo)
       allow create: if isOwner(userId) &&
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'champion', 'bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer', 'submittedAt'
+                       ]) &&
                        request.resource.data.userId == userId &&
                        request.time < timestamp.date(2026, 6, 11) &&
                        (request.resource.data.champion == null ||
@@ -198,7 +199,12 @@ service cloud.firestore {
                        isReasonableString(request.resource.data.topScorer, 200) &&
                        isReasonableString(request.resource.data.bestGoalkeeper, 200) &&
                        isReasonableString(request.resource.data.bestYoungPlayer, 200);
+
       allow update: if isOwner(userId) &&
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'champion', 'bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer', 'submittedAt'
+                       ]) &&
+                       request.resource.data.userId == userId &&
                        request.time < timestamp.date(2026, 6, 11) &&
                        (request.resource.data.champion == null ||
                         isReasonableString(request.resource.data.champion, 10)) &&
@@ -206,7 +212,31 @@ service cloud.firestore {
                        isReasonableString(request.resource.data.topScorer, 200) &&
                        isReasonableString(request.resource.data.bestGoalkeeper, 200) &&
                        isReasonableString(request.resource.data.bestYoungPlayer, 200);
+
       allow delete: if false;
+    }
+
+    // === AUDIT LOG ===
+    // Append-only žurnalas svarbiems admin veiksmams.
+    // Skaityti gali tik admin'ai (jautri info - kas ką darė).
+
+    match /audit_log/{logId} {
+      // Tik admin'as gali skaityti istoriją
+      allow read: if isAdmin();
+
+      // Įrašyti gali tik admin'as, ir tik su savo uid kaip actor.
+      // Tikrinamas griežtas field allowlist + actorUid validacija.
+      allow create: if isAdmin() &&
+                       request.resource.data.keys().hasOnly([
+                         'actorUid', 'action', 'targetId', 'details', 'timestamp'
+                       ]) &&
+                       request.resource.data.actorUid == request.auth.uid &&
+                       isReasonableString(request.resource.data.action, 100) &&
+                       (request.resource.data.targetId == null ||
+                        isReasonableString(request.resource.data.targetId, 200));
+
+      // Žurnalas nekeičiamas ir netrinasi - append-only
+      allow update, delete: if false;
     }
   }
 }

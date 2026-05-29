@@ -3,8 +3,45 @@
 // URL: /.netlify/functions/sync-results
 // Free tier: 125K užklausų/mėn
 //
-// Autentifikacija: reikalauja Firebase ID token Authorization header'yje + isAdmin check.
+// Apsaugos sluoksniai:
+// 1) Per-IP rate limit (10 req/min) - apsauga nuo abuse'o jei admin token sukompromituota
+// 2) Firebase ID token verifikacija (Authorization: Bearer ...)
+// 3) isAdmin check Firestore'e
 // Tai užkerta nelegalų API rakto naudojimą / mūsų football-data.org rate limit'o eikvojimą.
+
+// In-memory rate limit per IP. Resetinasi su cold start, bet pakanka apsaugai.
+// Net jei state pradingsta, tikras admin'as pasiekia po keliasekundžių pauzės.
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;  // 1 minutė
+const RATE_LIMIT_MAX = 10;                // 10 užklausų per minutę per IP
+const rateLimits = new Map();
+
+function getClientIp(event) {
+  const xff = event.headers['x-forwarded-for'] || event.headers['X-Forwarded-For'];
+  if (xff) return xff.split(',')[0].trim();
+  return event.headers['client-ip'] || event.headers['x-real-ip'] || 'unknown';
+}
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = rateLimits.get(ip);
+  if (!entry || now > entry.resetTime) {
+    rateLimits.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetTime - now) / 1000) };
+  }
+  entry.count++;
+  return { allowed: true };
+}
+
+// Periodiškai išvalyti pasibaigusius rate limit įrašus (kad Map'as neaugtų be galo)
+function cleanupRateLimits() {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimits.entries()) {
+    if (now > entry.resetTime) rateLimits.delete(ip);
+  }
+}
 
 exports.handler = async (event) => {
   const headers = {
@@ -24,6 +61,22 @@ exports.handler = async (event) => {
       statusCode: 405,
       headers,
       body: JSON.stringify({ error: 'Method not allowed' }),
+    };
+  }
+
+  // === RATE LIMIT ===
+  // Pirma patikra prieš jokius pajėgesnius veiksmus (token verifikaciją, API call).
+  // Užkerta brute-force prieš auth + saugo mūsų API quota.
+  if (Math.random() < 0.05) cleanupRateLimits(); // ~5% užklausų valymas
+  const ip = getClientIp(event);
+  const rl = checkRateLimit(ip);
+  if (!rl.allowed) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, 'Retry-After': String(rl.retryAfter) },
+      body: JSON.stringify({
+        error: `Per daug užklausų. Bandyk po ${rl.retryAfter} sek.`,
+      }),
     };
   }
 
