@@ -516,17 +516,18 @@ export async function setUserCompany(uid, companyId, companyName, companyCode) {
 }
 
 export async function seedDemoMatches() {
-  // 8 demo rungtynės - po vieną iš skirtingų grupių, su teisingomis PFČ 2026 komandomis.
-  // Naudoti testavimui prieš įkeliant visas 72 tikras rungtynes.
+  // 8 testinės rungtynės - aiškiai prieš tikrojo turnyro pradžią (birželio 1-4)
+  // tam, kad būtų lengvai atskiriamos nuo realių PFČ 2026 rungtynių (g01-g72, prasideda birželio 11).
+  // Datos UTC: 15:00 = 18:00 LT (vasara), 17:00 = 20:00 LT.
   const matches = [
-    { id: 'm1', home: 'MEX', away: 'RSA', kickoff: '2026-06-11T20:00:00Z', stage: 'group', group: 'A', status: 'upcoming', actualScore: null },
-    { id: 'm2', home: 'CAN', away: 'BIH', kickoff: '2026-06-12T18:00:00Z', stage: 'group', group: 'B', status: 'upcoming', actualScore: null },
-    { id: 'm3', home: 'BRA', away: 'MAR', kickoff: '2026-06-12T20:00:00Z', stage: 'group', group: 'C', status: 'upcoming', actualScore: null },
-    { id: 'm4', home: 'USA', away: 'PAR', kickoff: '2026-06-13T16:00:00Z', stage: 'group', group: 'D', status: 'upcoming', actualScore: null },
-    { id: 'm5', home: 'GER', away: 'CUW', kickoff: '2026-06-13T19:00:00Z', stage: 'group', group: 'E', status: 'upcoming', actualScore: null },
-    { id: 'm6', home: 'NED', away: 'JPN', kickoff: '2026-06-14T18:00:00Z', stage: 'group', group: 'F', status: 'upcoming', actualScore: null },
-    { id: 'm7', home: 'ARG', away: 'ALG', kickoff: '2026-06-14T21:00:00Z', stage: 'group', group: 'J', status: 'upcoming', actualScore: null },
-    { id: 'm8', home: 'ENG', away: 'CRO', kickoff: '2026-06-15T17:00:00Z', stage: 'group', group: 'L', status: 'upcoming', actualScore: null },
+    { id: 'm1', home: 'MEX', away: 'RSA', kickoff: '2026-06-01T15:00:00Z', stage: 'group', group: 'A', status: 'upcoming', actualScore: null },
+    { id: 'm2', home: 'CAN', away: 'BIH', kickoff: '2026-06-01T17:00:00Z', stage: 'group', group: 'B', status: 'upcoming', actualScore: null },
+    { id: 'm3', home: 'BRA', away: 'MAR', kickoff: '2026-06-02T15:00:00Z', stage: 'group', group: 'C', status: 'upcoming', actualScore: null },
+    { id: 'm4', home: 'USA', away: 'PAR', kickoff: '2026-06-02T17:00:00Z', stage: 'group', group: 'D', status: 'upcoming', actualScore: null },
+    { id: 'm5', home: 'GER', away: 'CUW', kickoff: '2026-06-03T15:00:00Z', stage: 'group', group: 'E', status: 'upcoming', actualScore: null },
+    { id: 'm6', home: 'NED', away: 'JPN', kickoff: '2026-06-03T17:00:00Z', stage: 'group', group: 'F', status: 'upcoming', actualScore: null },
+    { id: 'm7', home: 'ARG', away: 'ALG', kickoff: '2026-06-04T15:00:00Z', stage: 'group', group: 'J', status: 'upcoming', actualScore: null },
+    { id: 'm8', home: 'ENG', away: 'CRO', kickoff: '2026-06-04T17:00:00Z', stage: 'group', group: 'L', status: 'upcoming', actualScore: null },
   ];
 
   const batch = writeBatch(db);
