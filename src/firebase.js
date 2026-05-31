@@ -8,6 +8,7 @@ import {
   onAuthStateChanged,
   updateProfile,
   deleteUser,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -189,6 +190,15 @@ export async function registerUser(email, password, username, fullName, companyI
 
 export function loginUser(email, password) {
   return signInWithEmailAndPassword(auth, email, password);
+}
+
+// Siunčia slaptažodžio atstatymo nuorodą į vartotojo el. paštą.
+// Firebase serveriai apdoroja patį atstatymą - vartotojas paspaudžia nuorodą,
+// nustato naują slaptažodį Firebase puslapyje, grįžta į mūsų app prisijungimui.
+// SAUGUMAS: NIEKADA neatskleidžiame, ar el. paštas registruotas (anti-enumeration).
+// Frontend visada parodo „jei tokia paskyra egzistuoja - laiškas išsiųstas".
+export function requestPasswordReset(email) {
+  return sendPasswordResetEmail(auth, email);
 }
 
 export function logoutUser() {

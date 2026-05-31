@@ -6,7 +6,7 @@ import {
   AlertCircle, CheckCircle2, BookOpen, Info,
 } from 'lucide-react';
 import {
-  registerUser, loginUser, logoutUser, onAuthChange,
+  registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
   listenToUsersPrivate, migrateUsersToPrivateSchema,
@@ -777,6 +777,7 @@ const LoadingScreen = () => (
 );
 
 const LoginScreen = ({ onSwitchToRegister }) => {
+  const [mode, setMode] = useState('login'); // 'login' | 'reset' | 'reset-sent'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -796,6 +797,42 @@ const LoginScreen = ({ onSwitchToRegister }) => {
       setError(translateAuthError(err.code) || err.message);
       setLoading(false);
     }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setError('Įvesk el. paštą, į kurį siųsime instrukcijas');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await requestPasswordReset(email);
+      setMode('reset-sent');
+    } catch (err) {
+      // Anti-enumeration: nesakome, ar el. paštas registruotas.
+      // Net jei Firebase grąžina 'auth/user-not-found' - rodom tą patį pranešimą.
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
+        setMode('reset-sent');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Per daug bandymų. Palauk kelias minutes.');
+      } else {
+        setError(translateAuthError(err.code) || err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchToReset = () => {
+    setMode('reset');
+    setError('');
+    setPassword('');
+  };
+
+  const switchToLogin = () => {
+    setMode('login');
+    setError('');
   };
 
   return (
@@ -828,30 +865,99 @@ const LoginScreen = ({ onSwitchToRegister }) => {
         </div>
 
         <div className="card-light rounded-2xl p-5">
-          <h2 className="font-display text-lg uppercase tracking-wider text-[#441514] mb-4">Prisijungimas</h2>
+          {/* === PRISIJUNGIMO REŽIMAS === */}
+          {mode === 'login' && (
+            <>
+              <h2 className="font-display text-lg uppercase tracking-wider text-[#441514] mb-4">Prisijungimas</h2>
 
-          <ErrorAlert message={error} />
+              <ErrorAlert message={error} />
 
-          <div className="space-y-3">
-            <FormField label="El. paštas" type="email" placeholder="vardas@paštas.lt"
-              value={email} onChange={setEmail} autoComplete="email" />
-            <FormField label="Slaptažodis" type="password" placeholder="••••••••"
-              value={password} onChange={setPassword} autoComplete="current-password" />
-          </div>
+              <div className="space-y-3">
+                <FormField label="El. paštas" type="email" placeholder="vardas@paštas.lt"
+                  value={email} onChange={setEmail} autoComplete="email" />
+                <FormField label="Slaptažodis" type="password" placeholder="••••••••"
+                  value={password} onChange={setPassword} autoComplete="current-password" />
+              </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-5">
-            <button onClick={handleLogin} disabled={loading}
-              style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
-              className="py-3 rounded-xl font-display uppercase tracking-wider shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:brightness-110 active:scale-[0.98]">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Prisijungti
-            </button>
-            <button onClick={onSwitchToRegister} disabled={loading}
-              style={{ backgroundColor: '#ffffff', color: '#6A1107', border: '2px solid #6A1107' }}
-              className="py-3 rounded-xl font-display uppercase tracking-wider text-sm disabled:opacity-50 transition-all duration-200 hover:bg-[#FAF0E0] hover:scale-[1.02]">
-              Registruotis
-            </button>
-          </div>
+              {/* Slaptažodžio pamiršai nuoroda */}
+              <div className="mt-2 text-right">
+                <button type="button" onClick={switchToReset} disabled={loading}
+                  className="text-[11px] font-semibold text-[#6A1107] hover:text-[#441514] underline-offset-2 hover:underline transition-colors disabled:opacity-50">
+                  Pamiršai slaptažodį?
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <button onClick={handleLogin} disabled={loading}
+                  style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+                  className="py-3 rounded-xl font-display uppercase tracking-wider shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:brightness-110 active:scale-[0.98]">
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Prisijungti
+                </button>
+                <button onClick={onSwitchToRegister} disabled={loading}
+                  style={{ backgroundColor: '#ffffff', color: '#6A1107', border: '2px solid #6A1107' }}
+                  className="py-3 rounded-xl font-display uppercase tracking-wider text-sm disabled:opacity-50 transition-all duration-200 hover:bg-[#FAF0E0] hover:scale-[1.02]">
+                  Registruotis
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* === SLAPTAŽODŽIO ATSTATYMO FORMA === */}
+          {mode === 'reset' && (
+            <>
+              <h2 className="font-display text-lg uppercase tracking-wider text-[#441514] mb-1">Atstatyti slaptažodį</h2>
+              <p className="text-xs text-[#845641] mb-4">
+                Įvesk savo el. paštą — gausi nuorodą slaptažodžio atstatymui.
+              </p>
+
+              <ErrorAlert message={error} />
+
+              <div className="space-y-3">
+                <FormField label="El. paštas" type="email" placeholder="vardas@paštas.lt"
+                  value={email} onChange={setEmail} autoComplete="email" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-5">
+                <button onClick={switchToLogin} disabled={loading}
+                  style={{ backgroundColor: '#ffffff', color: '#845641', border: '2px solid #845641' }}
+                  className="py-3 rounded-xl font-display uppercase tracking-wider text-sm disabled:opacity-50 transition-all duration-200 hover:bg-[#FAF0E0] hover:scale-[1.02]">
+                  Atgal
+                </button>
+                <button onClick={handlePasswordReset} disabled={loading}
+                  style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+                  className="py-3 rounded-xl font-display uppercase tracking-wider shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:brightness-110 active:scale-[0.98]">
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Siųsti
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* === ATSTATYMO LAIŠKAS IŠSIŲSTAS - PATVIRTINIMAS === */}
+          {mode === 'reset-sent' && (
+            <>
+              <h2 className="font-display text-lg uppercase tracking-wider text-[#441514] mb-3">Patikrink el. paštą</h2>
+              <div className="rounded-lg p-3 mb-4" style={{ backgroundColor: '#FAF0E0', border: '1px solid rgba(132, 86, 65, 0.3)' }}>
+                <p className="text-sm text-[#441514] leading-relaxed">
+                  Jei <span className="font-mono font-bold text-[#6A1107]">{email}</span> egzistuoja sistemoje, atsiųsime nuorodą slaptažodžio atstatymui.
+                </p>
+              </div>
+              <p className="text-[11px] text-[#845641] mb-4 leading-relaxed">
+                Jei per 5 min. nieko negausi:
+              </p>
+              <ul className="text-[11px] text-[#845641] mb-5 space-y-1 leading-relaxed list-disc list-inside">
+                <li>Patikrink Spam / Šiukšlių aplanką</li>
+                <li>Patikrink, ar el. paštas teisingai įvestas</li>
+                <li>Pabandyk dar kartą po keliolikos minučių</li>
+              </ul>
+              <button onClick={switchToLogin}
+                style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
+                className="w-full py-3 rounded-xl font-display uppercase tracking-wider shadow-lg text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:brightness-110 active:scale-[0.98]">
+                Grįžti į prisijungimą
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-[#845641] uppercase tracking-widest">
@@ -3618,16 +3724,32 @@ export default function App() {
       setAuthUser(user);
       if (user) {
         try {
-          const profile = await getUserProfile(user.uid);
+          // RETRY profilio krovimo - apsauga nuo race condition tarp
+          // createUserWithEmailAndPassword (kuri auto-triggerina onAuthChange)
+          // ir registerUser Firestore dokumentų sukūrimo. Naujam vartotojui
+          // profile gali dar neegzistuoti pirmą bandymą - retry per ~3 sek.
+          let profile = null;
+          const delays = [0, 400, 800, 1200, 1600]; // iš viso ~4 sek
+          for (const d of delays) {
+            if (d > 0) await new Promise((r) => setTimeout(r, d));
+            try {
+              profile = await getUserProfile(user.uid);
+            } catch (_) {}
+            if (profile) break;
+          }
           setUserProfile(profile);
-          const bet = await getTournamentBet(user.uid);
-          if (bet) setTournamentBet({
-            champion: bet.champion || null,
-            bestPlayer: bet.bestPlayer || '',
-            topScorer: bet.topScorer || '',
-            bestGoalkeeper: bet.bestGoalkeeper || '',
-            bestYoungPlayer: bet.bestYoungPlayer || '',
-          });
+          if (profile) {
+            try {
+              const bet = await getTournamentBet(user.uid);
+              if (bet) setTournamentBet({
+                champion: bet.champion || null,
+                bestPlayer: bet.bestPlayer || '',
+                topScorer: bet.topScorer || '',
+                bestGoalkeeper: bet.bestGoalkeeper || '',
+                bestYoungPlayer: bet.bestYoungPlayer || '',
+              });
+            } catch (_) {}
+          }
         } catch (err) {
           console.error('Failed to load profile:', err);
         }
