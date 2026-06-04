@@ -2341,6 +2341,13 @@ const RulesScreen = () => {
         <p className="text-sm text-[#441514] leading-relaxed">
           Jei radai klaidą, ko nors trūksta arba reikia daugiau funkcijų — susisiek su administratoriumi. Šis totalizatorius yra vidinis, todėl visi atnaujinimai daromi pagal dalyvių pasiūlymus.
         </p>
+        <div className="mt-3 rounded-lg p-3 flex items-center gap-2 bg-[#D1A974]/10 border border-[#D1A974]/30">
+          <span className="text-[10px] font-bold text-[#845641] uppercase tracking-wider">Administratorius:</span>
+          <a href="mailto:paulius.barzodnis@mediena.lt"
+            className="font-mono text-xs font-bold text-[#6A1107] hover:text-[#441514] underline-offset-2 hover:underline transition-colors truncate">
+            paulius.barzodnis@mediena.lt
+          </a>
+        </div>
       </RuleSection>
     </div>
   );
