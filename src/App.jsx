@@ -3883,7 +3883,7 @@ export default function App() {
   return (
     <div className="app-bg font-body text-[#441514]">
       <Styles />
-      <div className="max-w-md lg:max-w-5xl mx-auto min-h-screen flex flex-col">
+      <div className="max-w-md lg:max-w-6xl xl:max-w-7xl mx-auto min-h-screen flex flex-col">
         <header className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between gap-4 shadow-md"
           style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #845641 50%, #5C3E2E 100%)' }}>
           <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -3894,20 +3894,21 @@ export default function App() {
             </div>
           </div>
 
-          {/* Desktop: tabs viduryje header'io */}
-          <nav className="hidden lg:flex flex-1 justify-center gap-1">
+          {/* Desktop: tabs viduryje header'io. Kompaktiškas padding, kad tilptų visi 7 punktai.
+              Mažesniam lg (1024-1279) ikonos pridėtos tik xl+ ekranams, kad sutaupyti vietos. */}
+          <nav className="hidden lg:flex flex-1 justify-center gap-0.5 overflow-x-auto scrollbar-hide">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = screen === item.id;
               return (
                 <button key={item.id} onClick={() => setScreen(item.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 hover:scale-[1.03] ${
+                  className={`flex items-center gap-1.5 px-2.5 xl:px-3 py-2 rounded-lg flex-shrink-0 transition-all duration-200 hover:scale-[1.03] ${
                     active
                       ? 'bg-white/15 text-white shadow-inner'
                       : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}>
-                  <Icon className="w-4 h-4" />
-                  <span className="text-xs font-bold uppercase tracking-wider">{item.label}</span>
+                  <Icon className="hidden xl:inline-block w-4 h-4 flex-shrink-0" />
+                  <span className="text-[11px] xl:text-xs font-bold uppercase tracking-wider whitespace-nowrap">{item.label}</span>
                 </button>
               );
             })}
