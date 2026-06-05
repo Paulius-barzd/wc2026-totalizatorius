@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import {
   registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount, updateOwnFullName,
+  acceptPolicyConsent, CURRENT_POLICY_VERSION,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
   listenToUsersPrivate, migrateUsersToPrivateSchema,
@@ -4068,6 +4069,192 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
 };
 
 // ============================================================
+// PRIVATUMO POLITIKOS SUTIKIMO GATE (re-consent seniems vartotojams)
+// ============================================================
+// Pirmas blokuojantis ekranas po prisijungimo, jei vartotojas dar nesutiko
+// su dabartine politikos versija. Du veiksmai: Sutinku arba Ištrinti paskyrą.
+// Be sutikimo - į totalizatorių neįleidžia.
+
+const PolicyConsentGate = ({ userProfile, onAccepted, onLogout }) => {
+  const { confirm, notify, dialog } = useDialog();
+  const [submitting, setSubmitting] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const handleAccept = async () => {
+    if (!agreed || submitting) return;
+    setSubmitting(true);
+    try {
+      await acceptPolicyConsent();
+      onAccepted();
+    } catch (err) {
+      await notify({
+        title: 'Klaida išsaugant sutikimą',
+        message: err.message || 'Nepavyko išsaugoti sutikimo. Bandyk dar kartą.',
+        variant: 'danger',
+      });
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletePassword) {
+      await notify({ title: 'Klaida', message: 'Įvesk slaptažodį patvirtinimui', variant: 'danger' });
+      return;
+    }
+    const ok = await confirm({
+      title: 'Ar tikrai ištrinti paskyrą?',
+      message: 'Visi tavo duomenys bus negrįžtamai pašalinti. Šio veiksmo atšaukti negalima.',
+      confirmLabel: 'Taip, ištrinti',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteUserAccount(deletePassword);
+      // Po sėkmingo ištrynimo Firebase auto-signs out
+    } catch (err) {
+      await notify({
+        title: 'Klaida ištrinant paskyrą',
+        message: err.message || 'Nepavyko ištrinti.',
+        variant: 'danger',
+      });
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="app-bg font-body text-[#441514] min-h-screen flex items-center justify-center p-4">
+      <Styles />
+      <div className="w-full max-w-lg card-light rounded-2xl p-6 shadow-2xl">
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#441514]/8">
+          <Lock className="w-5 h-5 text-[#54130E]" />
+          <h2 className="font-display text-lg uppercase tracking-wider text-[#441514]">Privatumo politika</h2>
+        </div>
+
+        <p className="text-sm text-[#441514] leading-relaxed mb-3">
+          Sveikas, <strong>{userProfile.username}</strong>! Atnaujinome PFČ 2026 totalizatoriaus privatumo politiką.
+          Prieš tęsiant, prašome susipažinti ir patvirtinti sutikimą.
+        </p>
+
+        <div className="rounded-lg bg-[#FAF0E0] border border-[#D1A974]/40 p-3 mb-4 max-h-56 overflow-y-auto text-xs text-[#441514] leading-relaxed space-y-2">
+          <div>
+            <strong>Duomenų valdytojas:</strong>{' '}
+            <a href="mailto:paulius.barzdonis@mediena.lt" className="font-mono text-[#6A1107]">
+              paulius.barzdonis@mediena.lt
+            </a>
+          </div>
+          <div>
+            <strong>Kokie duomenys renkami:</strong> el. paštas, slaptažodis (bcrypt hash), vardas/pavardė
+            (matomas tik tau ir admin'ui), vartotojo vardas, įmonė, prognozės, taškai.
+          </div>
+          <div>
+            <strong>Trečiosios šalys:</strong> Google Firebase (ES datacenter'iai, GDPR DPA), Netlify (hosting),
+            Google reCAPTCHA + Fonts.
+          </div>
+          <div>
+            <strong>Tavo teisės:</strong> prieiti, taisyti, ištrinti savo duomenis (Profile ekrane).
+          </div>
+          <div>
+            <strong>Saugojimas:</strong> iki turnyro pabaigos + 30 dienų. Tada PII anonimizuojama.
+          </div>
+          <div className="text-[10px] text-[#845641] pt-1 border-t border-[#D1A974]/30">
+            Pilną politiką galėsi pamatyti Taisyklių skiltyje po sutikimo.
+          </div>
+        </div>
+
+        {!showDeleteForm ? (
+          <>
+            <label className="flex items-start gap-2 cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                disabled={submitting}
+                className="mt-0.5 w-4 h-4 accent-[#54130E] flex-shrink-0"
+              />
+              <span className="text-xs text-[#441514] leading-relaxed">
+                Susipažinau ir sutinku su <strong>PFČ 2026 totalizatoriaus privatumo politika</strong> ir mano
+                asmens duomenų tvarkymu nurodytais tikslais.
+              </span>
+            </label>
+
+            <button
+              onClick={handleAccept}
+              disabled={!agreed || submitting}
+              style={{
+                background: agreed && !submitting ? 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)' : '#A88A6F',
+                color: '#ffffff',
+              }}
+              className="w-full py-3 rounded-xl font-display uppercase tracking-wider shadow-md transition-all duration-200 hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 mb-2"
+            >
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {submitting ? 'Saugoma...' : 'Sutinku ir tęsiu'}
+            </button>
+
+            <button
+              onClick={() => setShowDeleteForm(true)}
+              disabled={submitting}
+              className="w-full py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider text-[#54130E] hover:bg-[#54130E]/5 transition-colors"
+            >
+              Nesutinku — ištrinti paskyrą
+            </button>
+          </>
+        ) : (
+          <div className="space-y-3 pt-2 border-t border-[#54130E]/15">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-[#54130E] flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-[#845641] leading-relaxed">
+                Jei nesutinki su politika — tavo paskyra ir VISI duomenys bus negrįžtamai ištrinti.
+                Patvirtink slaptažodžiu.
+              </p>
+            </div>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              disabled={deleting}
+              className="w-full px-3 py-2 rounded-lg bg-[#FFFFFF] border border-[#54130E]/30 text-sm focus:outline-none focus:border-[#54130E] focus:ring-2 focus:ring-[#54130E]/15"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowDeleteForm(false); setDeletePassword(''); }}
+                disabled={deleting}
+                style={{ backgroundColor: '#FFFFFF', color: '#845641', border: '1px solid rgba(132, 86, 65, 0.3)' }}
+                className="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#FAF0E0] disabled:opacity-50"
+              >
+                Atšaukti
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting || !deletePassword}
+                style={{ backgroundColor: '#54130E', color: '#FFFFFF' }}
+                className="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {deleting ? 'Trinama...' : 'Ištrinti'}
+              </button>
+            </div>
+            <button
+              onClick={onLogout}
+              disabled={deleting}
+              className="w-full py-2 text-[10px] uppercase tracking-wider text-[#845641] hover:text-[#54130E] transition-colors"
+            >
+              Atsijungti ir nuspręsti vėliau
+            </button>
+          </div>
+        )}
+      </div>
+      {dialog}
+    </div>
+  );
+};
+
+// ============================================================
 // MAIN APP
 // ============================================================
 
@@ -4225,6 +4412,25 @@ export default function App() {
       return <RegisterScreen companies={companies} onSwitchToLogin={() => setAuthMode('login')} />;
     }
     return <LoginScreen onSwitchToRegister={() => setAuthMode('register')} />;
+  }
+
+  // RE-CONSENT GATE: vartotojas dar nesutiko su dabartine privatumo politika.
+  // Tikslo - apima ir senus (be policyConsent) ir tuos, kurie sutiko su senesne versija.
+  const needsConsent =
+    !userProfile.policyConsent ||
+    userProfile.policyConsent.version !== CURRENT_POLICY_VERSION;
+
+  if (needsConsent) {
+    return (
+      <PolicyConsentGate
+        userProfile={userProfile}
+        onAccepted={() => setUserProfile((p) => ({
+          ...p,
+          policyConsent: { version: CURRENT_POLICY_VERSION, acceptedAt: new Date() },
+        }))}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   // Admin screen (modal-like full screen)

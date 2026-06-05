@@ -159,11 +159,17 @@ export async function registerUser(email, password, username, fullName, companyI
     });
 
     // PRIVATE dalis - email ir fullName matomi tik savininkui ir admin'ui
+    // policyConsent - sutikimas saugomas su timestamp + versija (teisinis įrodymas).
+    // Naujieji vartotojai jau sutiko registracijos formoje (checkbox).
     await setDoc(doc(db, 'users_private', uid), {
       uid,
       email,
       fullName,
       createdAt: serverTimestamp(),
+      policyConsent: {
+        acceptedAt: serverTimestamp(),
+        version: CURRENT_POLICY_VERSION,
+      },
     });
 
     // ATOMINIS USERNAME REZERVAVIMAS - garantuoja unikalumą per visą sistemą.
@@ -207,6 +213,27 @@ export function requestPasswordReset(email) {
 // Pilnai ištrina vartotojo paskyrą ir visus jo duomenis.
 // Reikia slaptažodžio reauth (Firebase saugumo reikalavimas pavojingiems veiksmams).
 // Tvarka:
+// === PRIVATUMO POLITIKOS VERSIJA ===
+// Padidink versiją kai politikoje keičiasi esmė (pvz. nauja 3-čia šalis,
+// pasikeičia duomenų saugojimo terminas, pridedami nauji renkami laukai).
+// Visi vartotojai su senesne versija per re-consent flow turės sutikti iš naujo.
+export const CURRENT_POLICY_VERSION = '1.0';
+
+// === RE-CONSENT (esamiems vartotojams po politikos paskelbimo / atnaujinimo) ===
+// Saugomas timestamp + versija - tai įrodymas teisme.
+export async function acceptPolicyConsent() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Nesi prisijungęs');
+
+  await setDoc(doc(db, 'users_private', user.uid), {
+    uid: user.uid,
+    policyConsent: {
+      acceptedAt: serverTimestamp(),
+      version: CURRENT_POLICY_VERSION,
+    },
+  }, { merge: true });
+}
+
 // === VARDO / PAVARDĖS KEITIMAS (savininkui) ===
 // Atnaujina users_private/{uid}.fullName. Firestore Rules leidžia tik owner'iui arba admin'ui.
 // Trim + ilgio validacija (1-200 simboliai) prieš Firestore call'ą.
