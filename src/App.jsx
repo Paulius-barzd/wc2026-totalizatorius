@@ -3,10 +3,10 @@ import {
   Trophy, Home, Calendar, BarChart3, Lock, Settings,
   Award, Crown, Target, Star, Flame, Plus, Minus, Shield,
   ChevronRight, ChevronLeft, Radio, LogOut, Loader2,
-  AlertCircle, CheckCircle2, BookOpen, Info, Gift,
+  AlertCircle, CheckCircle2, BookOpen, Info, Gift, Pencil, X,
 } from 'lucide-react';
 import {
-  registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount,
+  registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount, updateOwnFullName,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
   listenToUsersPrivate, migrateUsersToPrivateSchema,
@@ -2001,13 +2001,41 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   );
 };
 
-const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tournamentResults, onLogout, onOpenAdmin }) => {
+const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tournamentResults, onLogout, onOpenAdmin, onProfileUpdated }) => {
   const { confirm, notify, dialog } = useDialog();
   const [showDeleteForm, setShowDeleteForm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(userProfile.fullName || '');
+  const [savingName, setSavingName] = useState(false);
   const me = usersWithPoints.find((u) => u.uid === userProfile.uid) || userProfile;
   const finishedMatches = matches.filter((m) => m.status === 'finished');
+
+  // Vardo/pavardės keitimas (saugoma users_private/{uid}.fullName)
+  const handleSaveName = async () => {
+    const trimmed = (nameDraft || '').trim();
+    if (trimmed === (userProfile.fullName || '')) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await updateOwnFullName(trimmed);
+      // Atnaujinti lokaliai - users_private listener'io nėra ne-admin'ams,
+      // taigi reikia pranešti tėvinei komponentei
+      if (onProfileUpdated) onProfileUpdated({ fullName: trimmed });
+      setEditingName(false);
+    } catch (err) {
+      await notify({
+        title: 'Klaida išsaugant',
+        message: err.message || 'Nepavyko atnaujinti vardo. Bandyk dar kartą.',
+        variant: 'danger',
+      });
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   // Paskyros ištrynimas su slaptažodžio reauth ir patvirtinimu
   const handleDeleteAccount = async () => {
@@ -2064,7 +2092,44 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
           {userProfile.avatarLetter}
         </div>
         <h2 className="font-display text-2xl text-[#441514]">{userProfile.username}</h2>
-        <p className="text-sm text-[#441514] mt-1">{userProfile.fullName}</p>
+        {editingName ? (
+          <div className="mt-2 flex items-center gap-1.5 justify-center max-w-xs mx-auto">
+            <input
+              type="text"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              disabled={savingName}
+              maxLength={200}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveName();
+                else if (e.key === 'Escape') { setNameDraft(userProfile.fullName || ''); setEditingName(false); }
+              }}
+              className="flex-1 min-w-0 px-2 py-1 rounded-md bg-[#FFFFFF] border border-[#845641]/40 text-sm text-[#441514] focus:outline-none focus:border-[#54130E] focus:ring-1 focus:ring-[#54130E]/20"
+              placeholder="Vardas Pavardė"
+            />
+            <button onClick={handleSaveName} disabled={savingName}
+              title="Išsaugoti"
+              className="p-1.5 rounded-md bg-[#54130E] text-white hover:brightness-110 disabled:opacity-50 flex-shrink-0">
+              {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            </button>
+            <button onClick={() => { setNameDraft(userProfile.fullName || ''); setEditingName(false); }}
+              disabled={savingName}
+              title="Atšaukti"
+              className="p-1.5 rounded-md bg-[#FFFFFF] text-[#845641] border border-[#845641]/30 hover:bg-[#FAF0E0] disabled:opacity-50 flex-shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-1.5 mt-1">
+            <p className="text-sm text-[#441514]">{userProfile.fullName}</p>
+            <button onClick={() => { setNameDraft(userProfile.fullName || ''); setEditingName(true); }}
+              title="Keisti vardą / pavardę"
+              className="p-1 rounded-md text-[#845641] hover:bg-[#845641]/10 transition-colors">
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <p className="text-xs text-[#845641]">{userProfile.email}</p>
 
         {/* Įmonės informacija */}
@@ -2551,11 +2616,6 @@ const RulesScreen = () => {
 
       {/* === PRIVATUMO POLITIKA === */}
       <RuleSection icon={Lock} title="Privatumo politika" color="#845641">
-        <p className="text-sm text-[#441514] leading-relaxed mb-3">
-          Šis totalizatorius yra <strong>vidinis VMG iniciatyvinis projektas</strong>. Tavo asmens duomenys
-          tvarkomi pagal ES Bendrąjį duomenų apsaugos reglamentą (GDPR).
-        </p>
-
         {/* Duomenų valdytojas */}
         <div className="space-y-3">
           <div>
@@ -4254,7 +4314,8 @@ export default function App() {
             userProfile={userProfile} />}
           {screen === 'profile' && <ProfileScreen userProfile={userProfile} usersWithPoints={usersWithPoints}
             matches={matches} predictions={predictions} tournamentResults={tournamentResults}
-            onLogout={handleLogout} onOpenAdmin={() => setScreen('admin')} />}
+            onLogout={handleLogout} onOpenAdmin={() => setScreen('admin')}
+            onProfileUpdated={(patch) => setUserProfile((p) => ({ ...p, ...patch }))} />}
         </main>
 
         {/* Mobile bottom nav - horizontaliai slenkantis su didesniais mygtukais.

@@ -207,6 +207,23 @@ export function requestPasswordReset(email) {
 // Pilnai ištrina vartotojo paskyrą ir visus jo duomenis.
 // Reikia slaptažodžio reauth (Firebase saugumo reikalavimas pavojingiems veiksmams).
 // Tvarka:
+// === VARDO / PAVARDĖS KEITIMAS (savininkui) ===
+// Atnaujina users_private/{uid}.fullName. Firestore Rules leidžia tik owner'iui arba admin'ui.
+// Trim + ilgio validacija (1-200 simboliai) prieš Firestore call'ą.
+export async function updateOwnFullName(newFullName) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Nesi prisijungęs');
+  const trimmed = (newFullName || '').trim();
+  if (!trimmed) throw new Error('Vardas pavardė negali būti tuščias');
+  if (trimmed.length < 2) throw new Error('Per trumpas vardas');
+  if (trimmed.length > 200) throw new Error('Per ilgas (max 200 simbolių)');
+
+  await setDoc(doc(db, 'users_private', user.uid), {
+    uid: user.uid,
+    fullName: trimmed,
+  }, { merge: true });
+}
+
 //   1) Reauth su slaptažodžiu (būtina Firebase Auth user.delete() reikalavimui)
 //   2) Ištrinti visus vartotojo predictions (batch)
 //   3) Ištrinti tournamentBets/{uid}
