@@ -9,6 +9,8 @@ import {
   updateProfile,
   deleteUser,
   sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -199,6 +201,73 @@ export function loginUser(email, password) {
 // Frontend visada parodo „jei tokia paskyra egzistuoja - laiškas išsiųstas".
 export function requestPasswordReset(email) {
   return sendPasswordResetEmail(auth, email);
+}
+
+// === PASKYROS IŠTRYNIMAS (GDPR „right to erasure") ===
+// Pilnai ištrina vartotojo paskyrą ir visus jo duomenis.
+// Reikia slaptažodžio reauth (Firebase saugumo reikalavimas pavojingiems veiksmams).
+// Tvarka:
+//   1) Reauth su slaptažodžiu (būtina Firebase Auth user.delete() reikalavimui)
+//   2) Ištrinti visus vartotojo predictions (batch)
+//   3) Ištrinti tournamentBets/{uid}
+//   4) Ištrinti users_private/{uid}
+//   5) Ištrinti usernames/{key} rezervaciją
+//   6) Ištrinti users/{uid}
+//   7) Ištrinti Firebase Auth user'į (signOut'as auto-vykdomas)
+export async function deleteUserAccount(currentPassword) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Nesi prisijungęs');
+  if (!user.email) throw new Error('Paskyra be el. pašto - negalima ištrinti šia funkcija');
+  if (!currentPassword) throw new Error('Reikalingas slaptažodis patvirtinimui');
+
+  const uid = user.uid;
+
+  // 1) Reauth - Firebase reikalauja neseno auth prieš user.delete()
+  try {
+    const cred = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, cred);
+  } catch (err) {
+    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      throw new Error('Neteisingas slaptažodis');
+    }
+    throw err;
+  }
+
+  // 2) Gauti username rezervacijos key'ą (reikia ištrynimui)
+  const publicSnap = await getDoc(doc(db, 'users', uid));
+  const uKey = publicSnap.exists() && publicSnap.data().username
+    ? usernameKey(publicSnap.data().username)
+    : null;
+
+  // 3) Ištrinti visus vartotojo predictions (batch)
+  const predsQuery = query(collection(db, 'predictions'), where('userId', '==', uid));
+  const predsSnap = await getDocs(predsQuery);
+  if (!predsSnap.empty) {
+    const batch = writeBatch(db);
+    predsSnap.forEach((d) => batch.delete(doc(db, 'predictions', d.id)));
+    await batch.commit();
+  }
+
+  // 4) Ištrinti tournamentBets (jei yra)
+  try { await deleteDoc(doc(db, 'tournamentBets', uid)); } catch (_) {}
+
+  // 5) Ištrinti users_private
+  try { await deleteDoc(doc(db, 'users_private', uid)); } catch (_) {}
+
+  // 6) Ištrinti username rezervaciją (jei yra)
+  if (uKey) {
+    try { await deleteDoc(doc(db, 'usernames', uKey)); } catch (_) {}
+  }
+
+  // 7) Ištrinti users public doc
+  try { await deleteDoc(doc(db, 'users', uid)); } catch (_) {}
+
+  // 8) Pažymėti audit log'e - PRIEŠ auth user delete (po jo nebebūsim authenticated)
+  await logAudit('deleteOwnAccount', uid, { predictionsDeleted: predsSnap.size });
+
+  // 9) Galiausiai - ištrinti Firebase Auth user'į
+  // Tai automatiškai signOut'ina
+  await deleteUser(user);
 }
 
 export function logoutUser() {

@@ -82,8 +82,9 @@ service cloud.firestore {
                        ]) &&
                        request.resource.data.uid == resource.data.uid;
 
-      // Trinti negalima
-      allow delete: if false;
+      // Owner gali ištrinti savo paskyrą (GDPR "right to erasure")
+      // Admin taip pat gali ištrinti bet kokią paskyrą
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     // === USERNAMES (unikalūs vartotojų vardai) ===
@@ -101,8 +102,11 @@ service cloud.firestore {
                        request.resource.data.keys().hasOnly(['uid']) &&
                        request.resource.data.uid == request.auth.uid;
 
-      // Immutable - rezervacijos nekeičiamos ir netrinasi
-      allow update, delete: if false;
+      // Update - nekeičiamos
+      allow update: if false;
+      // Delete - tik tuo atveju, kai vartotojas trina savo paskyrą.
+      // Patikrina, ar dabartinis auth user'is yra rezervacijos savininkas (uid sutampa).
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
     }
 
     // === USERS_PRIVATE (privatūs PII duomenys) ===
@@ -126,7 +130,8 @@ service cloud.firestore {
                        (request.resource.data.fullName == null ||
                         isReasonableString(request.resource.data.fullName, 200));
 
-      allow delete: if false;
+      // Owner gali ištrinti savo PII duomenis (GDPR "right to erasure")
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     // === COMPANIES ===
@@ -182,7 +187,8 @@ service cloud.firestore {
                        isValidScore(request.resource.data.home, 20) &&
                        isValidScore(request.resource.data.away, 20);
 
-      allow delete: if isAdmin();
+      // Trinti gali admin'as IR savininkas (paskyros ištrynimo metu - GDPR)
+      allow delete: if isAdmin() || isOwner(resource.data.userId);
     }
 
     // === TOURNAMENT RESULTS ===
@@ -232,7 +238,8 @@ service cloud.firestore {
                        isReasonableString(request.resource.data.bestGoalkeeper, 200) &&
                        isReasonableString(request.resource.data.bestYoungPlayer, 200);
 
-      allow delete: if false;
+      // Owner gali ištrinti savo turnyro prognozes (paskyros ištrynimo metu - GDPR)
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     // === AUDIT LOG ===

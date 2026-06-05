@@ -6,7 +6,7 @@ import {
   AlertCircle, CheckCircle2, BookOpen, Info, Gift,
 } from 'lucide-react';
 import {
-  registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset,
+  registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
   listenToUsersPrivate, migrateUsersToPrivateSchema,
@@ -969,12 +969,40 @@ const LoginScreen = ({ onSwitchToRegister }) => {
 };
 
 const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
+  const { notify, dialog } = useDialog();
   const [form, setForm] = useState({ username: '', fullName: '', email: '', password: '', companyChoice: '' });
+  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const updateField = (field) => (value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Privatumo politikos modal - condensed versija
+  const showPrivacyPolicy = () => {
+    notify({
+      title: 'Privatumo politika',
+      message:
+        'Šis totalizatorius yra vidinis VMG projektas.\n\n' +
+        'DUOMENŲ VALDYTOJAS:\n' +
+        'Paulius Barzdonis · paulius.barzdonis@mediena.lt\n\n' +
+        'KOKIE DUOMENYS RENKAMI:\n' +
+        '• El. paštas, slaptažodis (bcrypt hash) - prisijungimui\n' +
+        '• Vardas/pavardė - tik tau ir admin\'ui\n' +
+        '• Vartotojo vardas, įmonė, prognozės - kitiems matomi\n' +
+        '• Naršyklės elgesio signalai (Google reCAPTCHA) - botų apsauga\n\n' +
+        'TREČIOSIOS ŠALYS:\n' +
+        '• Google Firebase (autentifikacija + DB, ES datacenter\'iai, GDPR-compliant DPA)\n' +
+        '• Netlify (kodo hosting\'as, jokių PII)\n' +
+        '• Google reCAPTCHA + Fonts\n\n' +
+        'TAVO TEISĖS (GDPR):\n' +
+        '• Prieiti, taisyti, ištrinti savo duomenis (Profile ekrane)\n' +
+        '• Skųstis Valstybinei duomenų apsaugos inspekcijai\n\n' +
+        'SAUGOJIMAS:\n' +
+        'Iki turnyro pabaigos + 30 dienų. Tada PII anonimizuojama.\n\n' +
+        'Pilną politiką rasi Taisyklių skiltyje po prisijungimo.',
+    });
   };
 
   const handleRegister = async () => {
@@ -984,6 +1012,10 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
     }
     if (!form.companyChoice) {
       setError('Pasirink savo įmonę');
+      return;
+    }
+    if (!agreedToPolicy) {
+      setError('Patvirtinai, kad sutinki su Taisyklėmis ir Privatumo politika');
       return;
     }
     if (form.password.length < 8) {
@@ -1092,10 +1124,30 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
               </div>
             </div>
 
+            {/* Sutikimo checkbox - GDPR consent */}
+            <div className="mt-4 flex items-start gap-2.5 rounded-lg p-3 bg-[#D1A974]/8 border border-[#D1A974]/30">
+              <input
+                type="checkbox"
+                id="privacy-consent"
+                checked={agreedToPolicy}
+                onChange={(e) => setAgreedToPolicy(e.target.checked)}
+                disabled={loading}
+                className="mt-0.5 w-4 h-4 cursor-pointer accent-[#6A1107] flex-shrink-0"
+              />
+              <label htmlFor="privacy-consent" className="text-[11px] text-[#441514] leading-relaxed cursor-pointer">
+                Patvirtinau, kad susipažinau ir sutinku su{' '}
+                <button type="button" onClick={showPrivacyPolicy}
+                  className="text-[#6A1107] font-bold underline underline-offset-2 hover:text-[#441514] transition-colors">
+                  Privatumo politika
+                </button>
+                {' '}— suprantu, kokie duomenys renkami ir kaip jie tvarkomi.
+              </label>
+            </div>
+
             {/* Submit mygtukas su gradient + scale hover + shadow grow */}
-            <button onClick={handleRegister} disabled={loading}
+            <button onClick={handleRegister} disabled={loading || !agreedToPolicy}
               style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)' }}
-              className="w-full py-3.5 rounded-xl font-display uppercase tracking-wider text-white shadow-lg text-sm mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:brightness-110 active:scale-[0.98]">
+              className="w-full py-3.5 rounded-xl font-display uppercase tracking-wider text-white shadow-lg text-sm mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:brightness-110 active:scale-[0.98]">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Sukurti paskyrą
             </button>
@@ -1110,6 +1162,7 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
           </button>
         </p>
       </div>
+      {dialog}
     </div>
   );
 };
@@ -1950,8 +2003,40 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
 };
 
 const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tournamentResults, onLogout, onOpenAdmin }) => {
+  const { confirm, notify, dialog } = useDialog();
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const me = usersWithPoints.find((u) => u.uid === userProfile.uid) || userProfile;
   const finishedMatches = matches.filter((m) => m.status === 'finished');
+
+  // Paskyros ištrynimas su slaptažodžio reauth ir patvirtinimu
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      await notify({ title: 'Klaida', message: 'Įvesk slaptažodį patvirtinimui', variant: 'danger' });
+      return;
+    }
+    const confirmed = await confirm({
+      title: 'Ar tikrai ištrinti paskyrą?',
+      message: 'PASKUTINIS ĮSPĖJIMAS: bus negrįžtamai ištrinti VISI tavo duomenys — el. paštas, vardas, prognozės, taškai, lyderlentės pozicija. Šio veiksmo atšaukti negalima.',
+      confirmLabel: 'Taip, ištrinti viską',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteUserAccount(deletePassword);
+      // Po sėkmingo ištrynimo Firebase auto-signs out, onAuthChange perduoda į LoginScreen
+      // notify nereikia - per ~1 sek pasikeis ekranas
+    } catch (err) {
+      await notify({
+        title: 'Klaida ištrinant paskyrą',
+        message: err.message || 'Nepavyko ištrinti paskyros. Bandyk dar kartą.',
+        variant: 'danger',
+      });
+      setDeleting(false);
+    }
+  };
 
   const stats = useMemo(() => {
     let exact = 0, diff = 0, outcome = 0, wrong = 0, missed = 0;
@@ -2089,6 +2174,58 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
         className="w-full py-3 rounded-xl font-display uppercase tracking-wider transition-colors text-sm flex items-center justify-center gap-2 hover:bg-[#6A1107]/5">
         <LogOut className="w-4 h-4" /> Atsijungti
       </button>
+
+      {/* === PASKYROS IŠTRYNIMAS (GDPR „right to erasure") === */}
+      <div className="rounded-xl p-4 bg-[#54130E]/5 border border-[#54130E]/15 mt-6">
+        <div className="flex items-start gap-2 mb-3">
+          <AlertCircle className="w-4 h-4 text-[#54130E] flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="text-[10px] font-bold text-[#54130E] uppercase tracking-wider mb-1">Pavojinga zona</div>
+            <p className="text-[11px] text-[#845641] leading-relaxed">
+              Paskyros ištrynimas pašalins <strong>VISUS</strong> tavo duomenis: el. paštą, vardą, prognozes, taškus.
+              Šio veiksmo atšaukti <strong>NEGALIMA</strong>.
+            </p>
+          </div>
+        </div>
+
+        {!showDeleteForm ? (
+          <button onClick={() => setShowDeleteForm(true)}
+            style={{ backgroundColor: '#FFFFFF', color: '#54130E', border: '1px solid rgba(84, 19, 14, 0.4)' }}
+            className="w-full py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors hover:bg-[#54130E]/5 flex items-center justify-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5" /> Ištrinti mano paskyrą
+          </button>
+        ) : (
+          <div className="space-y-2 pt-2 border-t border-[#54130E]/15">
+            <label className="text-[10px] font-bold text-[#845641] uppercase tracking-wider block">
+              Patvirtink slaptažodžiu
+            </label>
+            <input type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              disabled={deleting}
+              className="w-full px-3 py-2 rounded-lg bg-[#FFFFFF] border border-[#54130E]/30 text-sm focus:outline-none focus:border-[#54130E] focus:ring-2 focus:ring-[#54130E]/15" />
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setShowDeleteForm(false); setDeletePassword(''); }}
+                disabled={deleting}
+                style={{ backgroundColor: '#FFFFFF', color: '#845641', border: '1px solid rgba(132, 86, 65, 0.3)' }}
+                className="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors hover:bg-[#FAF0E0] disabled:opacity-50">
+                Atšaukti
+              </button>
+              <button onClick={handleDeleteAccount}
+                disabled={deleting || !deletePassword}
+                style={{ backgroundColor: '#54130E', color: '#FFFFFF' }}
+                className="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2">
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {deleting ? 'Trinama...' : 'Ištrinti visiškai'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {dialog}
     </div>
   );
 };
@@ -2411,6 +2548,105 @@ const RulesScreen = () => {
         <p className="text-[11px] text-[#845641] mt-3">
           Spėjimams galioja ta pati skaičiavimo logika kaip ir grupių etape (5/3/2 tšk.). Po 11 m. baudinių serijos rezultatas fiksuojamas pagal pagrindinio laiko pabaigą (paprastai 1:1, 2:2 ir pan.).
         </p>
+      </RuleSection>
+
+      {/* === PRIVATUMO POLITIKA === */}
+      <RuleSection icon={Lock} title="Privatumo politika" color="#845641">
+        <p className="text-sm text-[#441514] leading-relaxed mb-3">
+          Šis totalizatorius yra <strong>vidinis VMG iniciatyvinis projektas</strong>. Tavo asmens duomenys
+          tvarkomi pagal ES Bendrąjį duomenų apsaugos reglamentą (GDPR).
+        </p>
+
+        {/* Duomenų valdytojas */}
+        <div className="space-y-3">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#845641] mb-1">Duomenų valdytojas</div>
+            <p className="text-xs text-[#441514] leading-relaxed">
+              Paulius Barzdonis — totalizatoriaus organizatorius. Kontaktas dėl duomenų užklausų:{' '}
+              <a href="mailto:paulius.barzdonis@mediena.lt"
+                className="font-mono font-bold text-[#6A1107] hover:underline">
+                paulius.barzdonis@mediena.lt
+              </a>
+            </p>
+          </div>
+
+          {/* Kokie duomenys renkami */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#845641] mb-1">Kokie duomenys renkami</div>
+            <ul className="text-xs text-[#441514] space-y-1 ml-4 list-disc leading-relaxed">
+              <li><strong>El. paštas, slaptažodis</strong> — paskyros sukūrimui (slaptažodis saugomas tik bcrypt hash'u, niekam neprieinamas)</li>
+              <li><strong>Vardas, pavardė</strong> — identifikacijai (matomas tik tau ir administratoriui)</li>
+              <li><strong>Vartotojo vardas, įmonė, prognozės, taškai</strong> — žaidimo logikai (matomi kitiems dalyviams)</li>
+              <li><strong>Naršyklės elgesio signalai</strong> (anonimizuoti) — Google reCAPTCHA naudoja botų atskyrimui</li>
+            </ul>
+          </div>
+
+          {/* Kur saugoma + 3čios šalys */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#845641] mb-1">Kur saugoma · trečiosios šalys</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <div className="rounded-lg p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+                <div className="font-bold text-xs text-[#441514] mb-1">Google Firebase</div>
+                <p className="text-[11px] text-[#845641] leading-relaxed">
+                  Autentifikacija + duomenų bazė. ES datacenter'iai. Pasirašyti DPA (Data Processing Addendum). GDPR atitinka.
+                </p>
+              </div>
+              <div className="rounded-lg p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+                <div className="font-bold text-xs text-[#441514] mb-1">Netlify</div>
+                <p className="text-[11px] text-[#845641] leading-relaxed">
+                  Aplikacijos kodo hosting'as. Jokie asmens duomenys nesaugomi.
+                </p>
+              </div>
+              <div className="rounded-lg p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+                <div className="font-bold text-xs text-[#441514] mb-1">Google reCAPTCHA v3</div>
+                <p className="text-[11px] text-[#845641] leading-relaxed">
+                  Botų apsauga. Renkami tik anonimizuoti elgesio signalai.
+                </p>
+              </div>
+              <div className="rounded-lg p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+                <div className="font-bold text-xs text-[#441514] mb-1">Google Fonts</div>
+                <p className="text-[11px] text-[#845641] leading-relaxed">
+                  Montserrat šrifto pateikimas. Renkamas tik IP.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Saugumo priemonės */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#845641] mb-1">Saugumo priemonės</div>
+            <ul className="text-xs text-[#441514] space-y-1 ml-4 list-disc leading-relaxed">
+              <li>Visi duomenys siunčiami HTTPS šifruotai</li>
+              <li>Slaptažodžiai bcrypt hash'uoti (niekas niekada nemato originalo)</li>
+              <li>Vardas/pavardė atskirti į privačią Firestore kolekciją (tik tau + admin'ui)</li>
+              <li>Server-side validacija per Firestore Security Rules</li>
+              <li>Admin veiksmai užfiksuoti audit log'e</li>
+              <li>Firebase App Check su reCAPTCHA — apsauga nuo bot'ų</li>
+            </ul>
+          </div>
+
+          {/* Tavo teisės */}
+          <div className="rounded-lg p-3 bg-[#D1A974]/10 border border-[#D1A974]/30">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#6A1107] mb-2">Tavo teisės pagal GDPR</div>
+            <ul className="text-xs text-[#441514] space-y-1 ml-4 list-disc leading-relaxed">
+              <li><strong>Prieiga</strong> — gali bet kada matyti, kokie tavo duomenys saugomi</li>
+              <li><strong>Taisymas</strong> — gali keisti netiksliai įvestus duomenis</li>
+              <li><strong>Ištrynimas</strong> — Profile ekrane gali ištrinti visą savo paskyrą (visi tavo duomenys pašalinami)</li>
+              <li><strong>Apribojimas</strong> — gali paprašyti laikinai sustabdyti tavo duomenų tvarkymą</li>
+              <li><strong>Skundas</strong> — turi teisę kreiptis į Valstybinę duomenų apsaugos inspekciją</li>
+            </ul>
+          </div>
+
+          {/* Saugojimo terminas */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#845641] mb-1">Saugojimo terminas</div>
+            <p className="text-xs text-[#441514] leading-relaxed">
+              Tavo duomenys saugomi iki turnyro pabaigos + 30 dienų po jo (apdovanojimų įteikimui ir statistikų peržiūrai).
+              Po to visi PII duomenys (el. paštas, vardas/pavardė) automatiškai pašalinami arba anonimizuojami.
+              Bet kada gali paprašyti ankstesnio ištrynimo.
+            </p>
+          </div>
+        </div>
       </RuleSection>
 
       {/* Kontaktas / klausimai */}
