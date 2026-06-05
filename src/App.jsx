@@ -997,8 +997,7 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
         '• Netlify (kodo hosting\'as, jokių PII)\n' +
         '• Google reCAPTCHA + Fonts\n\n' +
         'TAVO TEISĖS (GDPR):\n' +
-        '• Prieiti, taisyti, ištrinti savo duomenis (Profile ekrane)\n' +
-        '• Skųstis Valstybinei duomenų apsaugos inspekcijai\n\n' +
+        '• Prieiti, taisyti, ištrinti savo duomenis (Profile ekrane)\n\n' +
         'SAUGOJIMAS:\n' +
         'Iki turnyro pabaigos + 30 dienų. Tada PII anonimizuojama.\n\n' +
         'Pilną politiką rasi Taisyklių skiltyje po prisijungimo.',
@@ -2562,7 +2561,7 @@ const RulesScreen = () => {
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-[#845641] mb-1">Duomenų valdytojas</div>
             <p className="text-xs text-[#441514] leading-relaxed">
-              Paulius Barzdonis — totalizatoriaus organizatorius. Kontaktas dėl duomenų užklausų:{' '}
+              Kontaktas dėl duomenų užklausų:{' '}
               <a href="mailto:paulius.barzdonis@mediena.lt"
                 className="font-mono font-bold text-[#6A1107] hover:underline">
                 paulius.barzdonis@mediena.lt
@@ -2633,7 +2632,6 @@ const RulesScreen = () => {
               <li><strong>Taisymas</strong> — gali keisti netiksliai įvestus duomenis</li>
               <li><strong>Ištrynimas</strong> — Profile ekrane gali ištrinti visą savo paskyrą (visi tavo duomenys pašalinami)</li>
               <li><strong>Apribojimas</strong> — gali paprašyti laikinai sustabdyti tavo duomenų tvarkymą</li>
-              <li><strong>Skundas</strong> — turi teisę kreiptis į Valstybinę duomenų apsaugos inspekciją</li>
             </ul>
           </div>
 
