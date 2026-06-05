@@ -3,7 +3,7 @@ import {
   Trophy, Home, Calendar, BarChart3, Lock, Settings,
   Award, Crown, Target, Star, Flame, Plus, Minus, Shield,
   ChevronRight, ChevronLeft, Radio, LogOut, Loader2,
-  AlertCircle, CheckCircle2, BookOpen, Info,
+  AlertCircle, CheckCircle2, BookOpen, Info, Gift,
 } from 'lucide-react';
 import {
   registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset,
@@ -2275,6 +2275,83 @@ const RulesScreen = () => {
               Sudedami visų įmonės dalyvių taškai ir dalijami iš dalyvių skaičiaus. Taip mažos įmonės sąžiningai varžosi su didelėmis — kolektyvo dydis nesuteikia pranašumo.
             </p>
           </div>
+        </div>
+      </RuleSection>
+
+      {/* === PRIZAI === */}
+      <RuleSection icon={Gift} title="Prizai" color="#D1A974">
+        {/* Pagrindinis akcentas su gradient'u */}
+        <div className="rounded-xl p-4 mb-4 text-center relative overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #D1A974 0%, #FFFFFF 50%, #D1A974 100%)', border: '1px solid rgba(132, 86, 65, 0.3)' }}>
+          <Trophy className="w-7 h-7 mx-auto mb-2 text-[#6A1107]" />
+          <div className="font-display text-2xl text-[#441514] mb-1">4 NUGALĖTOJAI</div>
+          <p className="text-[11px] text-[#845641] uppercase tracking-widest">
+            iš bendros įskaitos
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-3 text-xs text-[#441514]">
+            <span className="font-bold">2</span>
+            <span className="opacity-70">iš administracijos</span>
+            <span className="text-[#845641] opacity-50">·</span>
+            <span className="font-bold">2</span>
+            <span className="opacity-70">iš darbininkų</span>
+          </div>
+        </div>
+
+        {/* Dvi kategorijos šalia */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            { key: 'admin', label: 'Administracija' },
+            { key: 'workers', label: 'Darbininkai' },
+          ].map((cat) => (
+            <div key={cat.key} className="card-light rounded-xl overflow-hidden">
+              <div className="px-4 py-2 text-center"
+                style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)' }}>
+                <span className="font-display text-xs uppercase tracking-widest text-[#D1A974]">
+                  {cat.label}
+                </span>
+              </div>
+              <div className="p-3 space-y-3">
+                {/* I vieta - aukso */}
+                <div className="flex gap-3 items-start">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md"
+                    style={{ background: 'linear-gradient(135deg, #E8C77A 0%, #D1A974 50%, #845641 100%)' }}>
+                    <Crown className="w-5 h-5 text-[#FFFFFF]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#D1A974] mb-0.5">
+                      I vieta
+                    </div>
+                    <div className="text-xs text-[#441514] leading-snug">
+                      Kamuolys <span className="opacity-50">+</span> šalikas <span className="opacity-50">+</span> VMG atributika
+                    </div>
+                  </div>
+                </div>
+
+                {/* II vieta - sidabro */}
+                <div className="flex gap-3 items-start pt-2 border-t border-[#441514]/8">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md"
+                    style={{ background: 'linear-gradient(135deg, #B5A18F 0%, #A88A6F 50%, #845641 100%)' }}>
+                    <Award className="w-5 h-5 text-[#FFFFFF]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#A88A6F] mb-0.5">
+                      II vieta
+                    </div>
+                    <div className="text-xs text-[#441514] leading-snug">
+                      VMG atributika
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Apatinė pastaba */}
+        <div className="mt-4 rounded-lg p-3 bg-[#D1A974]/8 border border-[#D1A974]/25">
+          <p className="text-[11px] text-[#441514] leading-relaxed">
+            <span className="font-bold">Spėk gerai — laimėk!</span> Apdovanojimai bus įteikiami po finalo, kai paaiškės galutinė lentelės pozicija. Sėkmės ir kuo daugiau tikslių spėjimų!
+          </p>
         </div>
       </RuleSection>
 
