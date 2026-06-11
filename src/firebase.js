@@ -62,8 +62,9 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 // Turnyro pradžios timestamp - po šio momento tournamentBets nebegalima keisti.
-// Turi sutapti su firestore.rules patikra (timestamp.date(2026, 6, 11) = 2026-06-11 00:00 UTC).
-export const TOURNAMENT_LOCK_TIME = new Date('2026-06-11T00:00:00Z').getTime();
+// 2026-06-11 22:00 Lietuvos laiku (vasaros UTC+3) = 19:00 UTC. Tai yra pirmų PFČ rungtynių pradžia.
+// Turi sutapti su firestore.rules patikra.
+export const TOURNAMENT_LOCK_TIME = new Date('2026-06-11T19:00:00Z').getTime();
 
 // === AUDIT LOG ===
 // Įrašo svarbų admin veiksmą į audit_log kolekciją. Nepertraukia pagrindinės operacijos

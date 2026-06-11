@@ -217,7 +217,7 @@ service cloud.firestore {
                          'userId', 'champion', 'bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer', 'submittedAt'
                        ]) &&
                        request.resource.data.userId == userId &&
-                       request.time < timestamp.date(2026, 6, 11) &&
+                       request.time < timestamp.date(2026, 6, 11) + duration.value(19, 'h') &&
                        (request.resource.data.champion == null ||
                         isReasonableString(request.resource.data.champion, 10)) &&
                        isReasonableString(request.resource.data.bestPlayer, 200) &&
@@ -230,7 +230,7 @@ service cloud.firestore {
                          'userId', 'champion', 'bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer', 'submittedAt'
                        ]) &&
                        request.resource.data.userId == userId &&
-                       request.time < timestamp.date(2026, 6, 11) &&
+                       request.time < timestamp.date(2026, 6, 11) + duration.value(19, 'h') &&
                        (request.resource.data.champion == null ||
                         isReasonableString(request.resource.data.champion, 10)) &&
                        isReasonableString(request.resource.data.bestPlayer, 200) &&
