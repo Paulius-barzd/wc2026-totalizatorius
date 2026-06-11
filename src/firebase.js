@@ -556,8 +556,50 @@ export function listenToAllTournamentBets(callback) {
 // === ADMIN FUNCTIONS ===
 
 export async function updateMatch(matchId, updates) {
-  await setDoc(doc(db, 'matches', matchId), updates, { merge: true });
-  await logAudit('updateMatch', matchId, updates);
+  // Jei admin pakeičia kickoff'ą, automatiškai sinchronizuoti kickoffMs (epoch ms),
+  // kuris naudojamas Firestore Rules laiko patikrai.
+  const finalUpdates = { ...updates };
+  if (updates.kickoff && !updates.kickoffMs) {
+    finalUpdates.kickoffMs = new Date(updates.kickoff).getTime();
+  }
+  await setDoc(doc(db, 'matches', matchId), finalUpdates, { merge: true });
+  await logAudit('updateMatch', matchId, finalUpdates);
+}
+
+// === MIGRACIJA: pridėti kickoffMs prie senų matches dokumentų ===
+// Vienkartinė admin operacija. Jei kickoff yra ISO string'as, generuoja kickoffMs (epoch ms).
+// Reikalinga, kad Firestore Rules galėtų rakinti predictions pagal kickoff laiką.
+export async function migrateAddKickoffMs() {
+  const snap = await getDocs(collection(db, 'matches'));
+  const batch = writeBatch(db);
+  let migrated = 0;
+  let skipped = 0;
+  let invalid = 0;
+
+  snap.forEach((d) => {
+    const data = d.data();
+    if (typeof data.kickoffMs === 'number') {
+      skipped++;
+      return;
+    }
+    if (!data.kickoff) {
+      invalid++;
+      return;
+    }
+    const ms = new Date(data.kickoff).getTime();
+    if (isNaN(ms)) {
+      invalid++;
+      return;
+    }
+    batch.update(d.ref, { kickoffMs: ms });
+    migrated++;
+  });
+
+  if (migrated > 0) {
+    await batch.commit();
+    await logAudit('migrateAddKickoffMs', null, { migrated, skipped, invalid });
+  }
+  return { migrated, skipped, invalid, total: snap.size };
 }
 
 // === COMPANIES (admin) ===
@@ -657,7 +699,7 @@ export async function seedDemoMatches() {
   const batch = writeBatch(db);
   matches.forEach((m) => {
     const ref = doc(db, 'matches', m.id);
-    batch.set(ref, m);
+    batch.set(ref, { ...m, kickoffMs: new Date(m.kickoff).getTime() });
   });
   await batch.commit();
   await logAudit('seedDemoMatches', null, { count: matches.length });
@@ -768,7 +810,7 @@ export async function seedWC2026Matches() {
   const batch = writeBatch(db);
   matches.forEach((m) => {
     const ref = doc(db, 'matches', m.id);
-    batch.set(ref, m);
+    batch.set(ref, { ...m, kickoffMs: new Date(m.kickoff).getTime() });
   });
   await batch.commit();
   await logAudit('seedWC2026Matches', null, { count: matches.length });
@@ -1103,6 +1145,7 @@ export async function syncResultsFromAPI() {
           home: homeCode,
           away: awayCode,
           kickoff: apiMatch.utcDate,
+          kickoffMs: new Date(apiMatch.utcDate).getTime(),
           stage: internalStage,
           group: null, // knockout match'ai neturi grupės
           status: newStatus,
@@ -1141,12 +1184,18 @@ export async function syncResultsFromAPI() {
       }
     }
 
+    // kickoffMs - pildome jei trūksta arba jei API atneša naują kickoff laiką
+    const apiKickoffMs = new Date(apiMatch.utcDate).getTime();
+    const needsKickoffMs = ourMatch.kickoffMs == null || ourMatch.kickoffMs !== apiKickoffMs;
+
     // Jei pildomas placeholder - VISADA reikia update'inti (bent komandos pasikeitė)
     if (fillingPlaceholder) {
       const ref = doc(db, 'matches', ourMatch.id);
       batch.update(ref, {
         home: homeCode,
         away: awayCode,
+        kickoff: apiMatch.utcDate,
+        kickoffMs: apiKickoffMs,
         status: newStatus,
         actualScore: newScore,
       });
@@ -1158,12 +1207,17 @@ export async function syncResultsFromAPI() {
     const statusChanged = newStatus !== ourMatch.status;
     const scoreChanged = JSON.stringify(newScore) !== JSON.stringify(ourMatch.actualScore);
 
-    if (statusChanged || scoreChanged) {
+    if (statusChanged || scoreChanged || needsKickoffMs) {
       const ref = doc(db, 'matches', ourMatch.id);
-      batch.update(ref, {
+      const updateData = {
         status: newStatus,
         actualScore: newScore,
-      });
+      };
+      if (needsKickoffMs) {
+        updateData.kickoffMs = apiKickoffMs;
+        updateData.kickoff = apiMatch.utcDate;
+      }
+      batch.update(ref, updateData);
       stats.updated++;
     } else {
       stats.skipped++;

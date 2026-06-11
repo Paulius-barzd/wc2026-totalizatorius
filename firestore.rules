@@ -27,6 +27,22 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/matches/$(matchId)).data.status;
     }
 
+    // Rungtynių kickoff'as kaip epoch milliseconds (skaičius).
+    // Pildomas seed/sync metu. Senuose įrašuose gali nebūti - tada laiko patikra praleidžiama
+    // (fallback'as į status patikrą, kuri vis tiek aktyvi).
+    function hasKickoffMs(matchId) {
+      return 'kickoffMs' in get(/databases/$(database)/documents/matches/$(matchId)).data;
+    }
+
+    function matchKickoffMs(matchId) {
+      return get(/databases/$(database)/documents/matches/$(matchId)).data.kickoffMs;
+    }
+
+    function beforeKickoff(matchId) {
+      return !hasKickoffMs(matchId) ||
+             request.time < timestamp.value(matchKickoffMs(matchId));
+    }
+
     function isValidScore(v, maxVal) {
       return v is int && v >= 0 && v <= maxVal;
     }
@@ -175,12 +191,14 @@ service cloud.firestore {
       allow create: if isOwner(request.resource.data.userId) &&
                        matchExists(request.resource.data.matchId) &&
                        matchStatus(request.resource.data.matchId) == 'upcoming' &&
+                       beforeKickoff(request.resource.data.matchId) &&
                        request.resource.data.keys().hasOnly(['userId', 'matchId', 'home', 'away', 'submittedAt']) &&
                        isValidScore(request.resource.data.home, 20) &&
                        isValidScore(request.resource.data.away, 20);
 
       allow update: if isOwner(resource.data.userId) &&
                        matchStatus(resource.data.matchId) == 'upcoming' &&
+                       beforeKickoff(resource.data.matchId) &&
                        request.resource.data.keys().hasOnly(['userId', 'matchId', 'home', 'away', 'submittedAt']) &&
                        request.resource.data.userId == resource.data.userId &&
                        request.resource.data.matchId == resource.data.matchId &&

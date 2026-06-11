@@ -12,7 +12,7 @@ import {
   listenToMatches, listenToUserPredictions, listenToAllPredictions, listenToUsers, listenToCompanies,
   listenToUsersPrivate, migrateUsersToPrivateSchema,
   listenToAllTournamentBets, listenToTournamentResults, saveTournamentResults,
-  updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches, syncResultsFromAPI,
+  updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches, syncResultsFromAPI, migrateAddKickoffMs,
   createCompany, updateCompany, deleteCompany, setUserAdmin, setUserCompany,
   seedKnockoutStructure,
   TOURNAMENT_LOCK_TIME,
@@ -3790,6 +3790,11 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
   const handleSyncFromAPI = async () => {
     setSeeding(true);
     try {
+      // Vienkartinė savaiminė migracija - užtikrina, kad seni matches įrašai
+      // turėtų kickoffMs lauką (reikalinga Firestore Rules laiko patikrai).
+      // Idempotent: praleidžiama matches, kurie jau turi kickoffMs.
+      await migrateAddKickoffMs();
+
       const stats = await syncResultsFromAPI();
       let msg =
         `Iš API: ${stats.total} rungtynių\n` +
