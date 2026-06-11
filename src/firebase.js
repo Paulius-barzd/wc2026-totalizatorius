@@ -1006,6 +1006,14 @@ function mapApiStatus(apiStatus) {
   return 'upcoming'; // TIMED, SCHEDULED, POSTPONED, CANCELLED, SUSPENDED
 }
 
+// Statusų prioritetai - aukštesnis = vėlesnė turnyro fazė.
+// Sync (cron arba admin) NIEKADA negrąžina status atgal (pvz. live -> upcoming),
+// nes API gali turėti vėlavimą ir reportuoti TIMED net jau prasidėjusiai rungtynei.
+const STATUS_RANK = { upcoming: 0, live: 1, finished: 2 };
+function shouldUpgradeStatus(current, incoming) {
+  return (STATUS_RANK[incoming] || 0) > (STATUS_RANK[current] || 0);
+}
+
 // API stage → mūsų vidinis stage
 const API_STAGE_TO_INTERNAL = {
   'GROUP_STAGE': 'group',
@@ -1165,22 +1173,19 @@ export async function syncResultsFromAPI() {
 
     stats.matched++;
 
-    // Naujas statusas iš API
-    const newStatus = mapApiStatus(apiMatch.status);
-
-    // Naujas rezultatas
-    let newScore = null;
+    // Statusas + rezultatas iš API
+    const apiStatusMapped = mapApiStatus(apiMatch.status);
+    let apiScore = null;
     const ftHome = apiMatch.score?.fullTime?.home;
     const ftAway = apiMatch.score?.fullTime?.away;
     const htHome = apiMatch.score?.halfTime?.home;
     const htAway = apiMatch.score?.halfTime?.away;
 
-    if ((newStatus === 'finished' || newStatus === 'live')) {
+    if ((apiStatusMapped === 'finished' || apiStatusMapped === 'live')) {
       if (ftHome != null && ftAway != null) {
-        newScore = { home: ftHome, away: ftAway };
+        apiScore = { home: ftHome, away: ftAway };
       } else if (htHome != null && htAway != null) {
-        // Live match, only halftime data available
-        newScore = { home: htHome, away: htAway };
+        apiScore = { home: htHome, away: htAway };
       }
     }
 
@@ -1196,23 +1201,36 @@ export async function syncResultsFromAPI() {
         away: awayCode,
         kickoff: apiMatch.utcDate,
         kickoffMs: apiKickoffMs,
-        status: newStatus,
-        actualScore: newScore,
+        status: apiStatusMapped,
+        actualScore: apiScore,
       });
       stats.updated++;
       continue;
     }
 
-    // Įprastinis update - ar reikia kažką keisti?
-    const statusChanged = newStatus !== ourMatch.status;
-    const scoreChanged = JSON.stringify(newScore) !== JSON.stringify(ourMatch.actualScore);
+    // === MONOTONIŠKAS STATUS UPGRADE ===
+    // Niekada negrąžinam status atgal: jei mūsų DB yra 'live' bet API atneša 'upcoming'
+    // (dėl API vėlavimo), paliekam mūsų esamą reikšmę. Tai apsaugo admin'o rankinį
+    // override'ą nuo cron'o perrašymo.
+    const finalStatus = shouldUpgradeStatus(ourMatch.status, apiStatusMapped)
+      ? apiStatusMapped
+      : ourMatch.status;
+
+    // Score'as atnaujinamas tik jei API turi rezultatą. Jei API neturi (null), bet mes turime,
+    // nepalieskim - tai admin'o rankinis pakeitimas, vertingesnis nei API null.
+    let finalScore = ourMatch.actualScore;
+    if ((finalStatus === 'live' || finalStatus === 'finished') && apiScore != null) {
+      finalScore = apiScore;
+    }
+
+    const statusChanged = finalStatus !== ourMatch.status;
+    const scoreChanged = JSON.stringify(finalScore) !== JSON.stringify(ourMatch.actualScore);
 
     if (statusChanged || scoreChanged || needsKickoffMs) {
       const ref = doc(db, 'matches', ourMatch.id);
-      const updateData = {
-        status: newStatus,
-        actualScore: newScore,
-      };
+      const updateData = {};
+      if (statusChanged) updateData.status = finalStatus;
+      if (scoreChanged) updateData.actualScore = finalScore;
       if (needsKickoffMs) {
         updateData.kickoffMs = apiKickoffMs;
         updateData.kickoff = apiMatch.utcDate;
