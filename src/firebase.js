@@ -470,12 +470,43 @@ export function listenToUserPredictions(uid, callback) {
   });
 }
 
-export function listenToAllPredictions(callback) {
-  return onSnapshot(collection(db, 'predictions'), (snap) => {
+// SVARBU: skaityti VISAS predictions kolekcijoje ne-admin'ams Firestore Rules NEleidžia,
+// nes egzistuoja predictions su 'upcoming' rungtynėmis (kurių rule blokuoja). Vienas
+// neperleidžiamas dokumentas atmeta visą query.
+//
+// Sprendimas: query'inti TIK predictions iš pradėjusių (live/finished) rungtynių, su
+// 'where matchId in [chunk]'. Firestore 'in' palaiko iki 30 reikšmių, tad chunkinam.
+// Kai matches sąrašas pasikeičia (status persijungia), iš naujo prenumeruojama.
+export function listenToFinishedPredictions(matchIds, callback) {
+  if (!matchIds || matchIds.length === 0) {
+    callback([]);
+    return () => {};
+  }
+  const CHUNK = 30;
+  const chunks = [];
+  for (let i = 0; i < matchIds.length; i += CHUNK) {
+    chunks.push(matchIds.slice(i, i + CHUNK));
+  }
+  const perChunk = new Map();
+  const emit = () => {
     const all = [];
-    snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
+    perChunk.forEach((arr) => all.push(...arr));
     callback(all);
+  };
+  const unsubs = chunks.map((ids, idx) => {
+    const q = query(collection(db, 'predictions'), where('matchId', 'in', ids));
+    return onSnapshot(q, (snap) => {
+      const arr = [];
+      snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
+      perChunk.set(idx, arr);
+      emit();
+    }, (err) => {
+      console.warn('listenToFinishedPredictions chunk', idx, 'denied:', err.code);
+      perChunk.set(idx, []);
+      emit();
+    });
   });
+  return () => unsubs.forEach((u) => u());
 }
 
 export function listenToUsers(callback) {
