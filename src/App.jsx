@@ -720,13 +720,13 @@ const LeaderboardFixAnnouncement = ({ onDismiss }) => (
     <div className="flex items-center gap-2 mb-3">
       <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#54130E' }} />
       <h3 className="font-display text-base uppercase tracking-wider text-[#441514]">
-        Lyderlentė pataisyta
+        Statistika pataisyta
       </h3>
     </div>
     <p className="text-sm text-[#845641] mb-4 whitespace-pre-line leading-relaxed">
-      {`Buvo bug'as — kolegoms be administratoriaus teisių lyderlentė rodė visus 0 taškų.\n\n`}
-      {`Tavo taškai NIEKUR neprapuolė ir negalėjo prapulti. Sistema kiekvieną kartą juos skaičiuoja iš išsaugotų prognozių ir oficialių rezultatų — abu šie duomenys visą laiką liko nepaliesti.\n\n`}
-      {`Dabar lyderlentė vėl rodo realią suvestinę. Atsiprašau už nepatogumą.`}
+      {`Buvo klaida — kolegoms be administratoriaus teisių bendra įskaita rodė visus 0 taškų.\n\n`}
+      {`Tavo taškai NIEKUR nedingo ir negalėjo dingti. Sistema kiekvieną kartą juos skaičiuoja iš išsaugotų prognozių ir oficialių rezultatų — abu šie duomenys visą laiką liko nepaliesti.\n\n`}
+      {`Dabar statistika vėl rodo realią suvestinę. Atsiprašau už nepatogumus.`}
     </p>
     <button
       onClick={onDismiss}
@@ -2074,7 +2074,7 @@ const ProfileScreen = ({ userProfile, usersWithPoints, matches, predictions, tou
     }
     const confirmed = await confirm({
       title: 'Ar tikrai ištrinti paskyrą?',
-      message: 'PASKUTINIS ĮSPĖJIMAS: bus negrįžtamai ištrinti VISI tavo duomenys — el. paštas, vardas, prognozės, taškai, lyderlentės pozicija. Šio veiksmo atšaukti negalima.',
+      message: 'PASKUTINIS ĮSPĖJIMAS: bus negrįžtamai ištrinti VISI tavo duomenys — el. paštas, vardas, prognozės, taškai, pozicija bendroje įskaitoje. Šio veiksmo atšaukti negalima.',
       confirmLabel: 'Taip, ištrinti viską',
       variant: 'danger',
     });
@@ -2353,7 +2353,7 @@ const RulesScreen = () => {
     <div className="space-y-4 pb-24 lg:pb-8">
       <div>
         <h1 className="font-display text-3xl lg:text-4xl text-[#441514] mb-1">TAISYKLĖS</h1>
-        <p className="text-sm text-[#845641]">Kaip žaisti, kaip skaičiuojami taškai, kaip rikiuojama lyderlentė</p>
+        <p className="text-sm text-[#845641]">Kaip žaisti, kaip skaičiuojami taškai, kaip rikiuojama bendra įskaita</p>
       </div>
 
       {/* Apžvalga */}
