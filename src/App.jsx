@@ -709,6 +709,34 @@ const ModalOverlay = ({ children, onClose }) => (
   </div>
 );
 
+// Vienkartinis pranešimas po prisijungimo apie 2026-06-15 lyderlentės pataisymą.
+// Rodomas tik kartą per naršyklę (localStorage), ir tik iki ANNOUNCEMENT_EXPIRY datos —
+// po jos net naujiems vartotojams nebepasirodys, kad nesivertė nebeaktualios žinutės.
+const ANNOUNCEMENT_ID = 'leaderboardFix_2026_06_15';
+const ANNOUNCEMENT_EXPIRY_MS = new Date('2026-06-30T00:00:00Z').getTime();
+
+const LeaderboardFixAnnouncement = ({ onDismiss }) => (
+  <ModalOverlay onClose={onDismiss}>
+    <div className="flex items-center gap-2 mb-3">
+      <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#54130E' }} />
+      <h3 className="font-display text-base uppercase tracking-wider text-[#441514]">
+        Lyderlentė pataisyta
+      </h3>
+    </div>
+    <p className="text-sm text-[#845641] mb-4 whitespace-pre-line leading-relaxed">
+      {`Buvo bug'as — kolegoms be administratoriaus teisių lyderlentė rodė visus 0 taškų.\n\n`}
+      {`Tavo taškai NIEKUR neprapuolė ir negalėjo prapulti. Sistema kiekvieną kartą juos skaičiuoja iš išsaugotų prognozių ir oficialių rezultatų — abu šie duomenys visą laiką liko nepaliesti.\n\n`}
+      {`Dabar lyderlentė vėl rodo realią suvestinę. Atsiprašau už nepatogumą.`}
+    </p>
+    <button
+      onClick={onDismiss}
+      style={{ backgroundColor: '#54130E', color: '#ffffff' }}
+      className="w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:opacity-90">
+      Supratau
+    </button>
+  </ModalOverlay>
+);
+
 // useDialog hook - grąžina async `confirm`/`alert` funkcijas ir JSX dialog'ą.
 // Naudoti vietoj native window.confirm/alert, kad UI atitiktų app dizainą.
 function useDialog() {
@@ -4287,6 +4315,8 @@ export default function App() {
     bestGoalkeeper: '',
     bestYoungPlayer: '',
   });
+  // Vienkartinis lyderlentės pataisymo pranešimas (žr. LeaderboardFixAnnouncement).
+  const [showLeaderboardAnnouncement, setShowLeaderboardAnnouncement] = useState(false);
 
   // Listen to auth state
   useEffect(() => {
@@ -4352,6 +4382,26 @@ export default function App() {
   useEffect(() => {
     return listenToCompanies(setCompanies);
   }, []);
+
+  // Vienkartinis pranešimas apie lyderlentės pataisymą - rodyti tik užkrovus profilį,
+  // jei (a) terminas dar nepasibaigė, (b) localStorage flag'as dar nenustatytas.
+  useEffect(() => {
+    if (!userProfile) return;
+    if (Date.now() > ANNOUNCEMENT_EXPIRY_MS) return;
+    try {
+      const seen = localStorage.getItem(`seen_${ANNOUNCEMENT_ID}`);
+      if (!seen) setShowLeaderboardAnnouncement(true);
+    } catch (_) {
+      // localStorage neprieinama (private mode + lockdown) - praleisti
+    }
+  }, [userProfile?.uid]);
+
+  const dismissLeaderboardAnnouncement = () => {
+    try {
+      localStorage.setItem(`seen_${ANNOUNCEMENT_ID}`, '1');
+    } catch (_) {}
+    setShowLeaderboardAnnouncement(false);
+  };
 
   // Calculate points for all users (match prognosis + tournament prognosis)
   const usersWithPoints = useMemo(() => {
@@ -4558,6 +4608,9 @@ export default function App() {
         </nav>
       </div>
       {dialog}
+      {showLeaderboardAnnouncement && (
+        <LeaderboardFixAnnouncement onDismiss={dismissLeaderboardAnnouncement} />
+      )}
     </div>
   );
 }
