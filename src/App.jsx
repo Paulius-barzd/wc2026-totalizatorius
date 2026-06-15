@@ -4330,37 +4330,23 @@ export default function App() {
     });
   }, []);
 
-  // Listen to data when authenticated (be allPredictions - tas pridedamas atskirai
-  // su priklausomybe nuo matches sąrašo, kad chunked query būtų atnaujinama).
+  // Listen to data when authenticated
+  // listenToFinishedPredictions filtruoja per `where('revealed', '==', true)` —
+  // tai vienintelis būdas patenkinti Firestore Rules query'iams. Cron'as
+  // (netlify/functions/sync-results-cron.js) set'ina revealed=true kai match
+  // pereina iš 'upcoming' į 'live'/'finished'.
   useEffect(() => {
     if (!authUser) return;
     const unsubs = [
       listenToMatches(setMatches),
       listenToUserPredictions(authUser.uid, setPredictions),
+      listenToFinishedPredictions(setAllPredictions),
       listenToUsers(setUsers),
       listenToAllTournamentBets(setAllTournamentBets),
       listenToTournamentResults(setTournamentResults),
     ];
     return () => unsubs.forEach((u) => u());
   }, [authUser]);
-
-  // Stabilus pradėjusių rungtynių ID sąrašas. Atsinaujina kai rungtynė persijungia
-  // upcoming -> live/finished, BET ne kai pasikeičia score (kad nereikia perprenumeruoti).
-  const startedMatchIdsKey = useMemo(() => {
-    return matches
-      .filter((m) => m.status === 'live' || m.status === 'finished')
-      .map((m) => m.id)
-      .sort()
-      .join(',');
-  }, [matches]);
-
-  // Prenumeruojam predictions tik iš pradėjusių rungtynių - tai Firestore Rules leidžia
-  // skaityti visiems vartotojams. Be šito ne-admin gauna [] visiems.
-  useEffect(() => {
-    if (!authUser) return;
-    const ids = startedMatchIdsKey ? startedMatchIdsKey.split(',') : [];
-    return listenToFinishedPredictions(ids, setAllPredictions);
-  }, [authUser, startedMatchIdsKey]);
 
   // Companies - subscribe visada (reikalinga registracijos formai prieš auth)
   useEffect(() => {

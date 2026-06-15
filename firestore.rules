@@ -179,13 +179,19 @@ service cloud.firestore {
     }
 
     // === PREDICTIONS ===
+    // SVARBU dėl leaderboard'o:
+    // Branch 3 (resource.data.revealed == true) leidžia ne-admin'ams query'inti
+    // visas pasibaigusių/vyksta rungtynių prognozes per `where('revealed', '==', true)`.
+    // Cron'as set'ina revealed=true visoms predictions, kai jų match pereina iš
+    // 'upcoming' į 'live'/'finished' (žr. netlify/functions/sync-results-cron.js).
+    // Tai būtina, nes Firestore Rules query'iams reikalauja STATIŠKAI patenkinamos
+    // sąlygos — `get()` ant matches kolekcijos neveikia listenToCollection užklausoje.
 
     match /predictions/{predId} {
       allow read: if isAuth() && (
         resource.data.userId == request.auth.uid ||
         isAdmin() ||
-        (matchExists(resource.data.matchId) &&
-         matchStatus(resource.data.matchId) != 'upcoming')
+        resource.data.revealed == true
       );
 
       allow create: if isOwner(request.resource.data.userId) &&
@@ -196,17 +202,35 @@ service cloud.firestore {
                        isValidScore(request.resource.data.home, 20) &&
                        isValidScore(request.resource.data.away, 20);
 
+      // Owner gali keisti TIK home/away/submittedAt. `revealed` ir kiti laukai neperžengia.
+      // Naudojam diff().affectedKeys() vietoje hasOnly, kad galėtų egzistuoti revealed
+      // laukas po cron reveal'o (nors update vis tiek tik kai status='upcoming').
       allow update: if isOwner(resource.data.userId) &&
                        matchStatus(resource.data.matchId) == 'upcoming' &&
                        beforeKickoff(resource.data.matchId) &&
-                       request.resource.data.keys().hasOnly(['userId', 'matchId', 'home', 'away', 'submittedAt']) &&
-                       request.resource.data.userId == resource.data.userId &&
-                       request.resource.data.matchId == resource.data.matchId &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['home', 'away', 'submittedAt']) &&
                        isValidScore(request.resource.data.home, 20) &&
                        isValidScore(request.resource.data.away, 20);
 
+      // Admin'as gali set'inti TIK `revealed` lauką iš false → true. Naudojama admin'o
+      // rankinio sync'o metu (kai cron'o nesilaukia), kad leaderboard'as iškart atsinaujintų.
+      // Negali grįžti atgal į false; negali keisti kitų laukų.
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealed']) &&
+                       request.resource.data.revealed == true;
+
       // Trinti gali admin'as IR savininkas (paskyros ištrynimo metu - GDPR)
       allow delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    // === SYSTEM (tarnybinė meta-info) ===
+    // Cron'as saugo backfill statusą (kada paskutinį kartą buvo padaryta revealed
+    // backfill migracija). Skaityti gali tik admin'as; rašyti — niekas iš kliento
+    // (tik Admin SDK iš Netlify funkcijų, kuris apeina rules).
+
+    match /system/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // === TOURNAMENT RESULTS ===

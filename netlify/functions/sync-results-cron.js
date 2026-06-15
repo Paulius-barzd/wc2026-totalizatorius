@@ -101,6 +101,66 @@ const API_STAGE_TO_INTERNAL = {
 };
 
 // ============================================================
+// PREDICTIONS REVEAL — žymi predictions kaip viešai matomas leaderboard'e
+// ============================================================
+// Firestore Rules query'iams reikalauja statiškai patenkinamos sąlygos.
+// Klientas daro `where('revealed', '==', true)`, rule branch 3 patikrina tą patį
+// per-doc. Be šio lauko ne-admin'ai gauna permission-denied visam query'iui.
+const FIRESTORE_BATCH_LIMIT = 500;
+
+async function revealPredictionsForMatches(db, matchIds) {
+  if (!matchIds || matchIds.length === 0) return 0;
+  let totalRevealed = 0;
+  for (const matchId of matchIds) {
+    const predsSnap = await db.collection('predictions').where('matchId', '==', matchId).get();
+    const docs = predsSnap.docs.filter((d) => d.data().revealed !== true);
+    for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_LIMIT) {
+      const chunk = docs.slice(i, i + FIRESTORE_BATCH_LIMIT);
+      const batch = db.batch();
+      chunk.forEach((d) => batch.update(d.ref, { revealed: true }));
+      await batch.commit();
+      totalRevealed += chunk.length;
+    }
+  }
+  return totalRevealed;
+}
+
+// Self-healing backfill — pirmą kartą po deploy'o nuskaitom visas non-upcoming
+// rungtynes ir reveal'iname jų predictions. Po sėkmingo backfill'o pažymime
+// system/backfillStatus, kad sekančios cron iteracijos praleistų šį žingsnį.
+async function maybeRunBackfill(db, stats) {
+  const ref = db.collection('system').doc('backfillStatus');
+  const snap = await ref.get();
+  if (snap.exists && snap.data().revealedBackfillAt) {
+    return; // backfill jau atliktas
+  }
+
+  const matchesSnap = await db.collection('matches').where('status', 'in', ['live', 'finished']).get();
+  const matchIds = matchesSnap.docs.map((d) => d.id);
+  const revealed = await revealPredictionsForMatches(db, matchIds);
+  stats.backfillRevealed = revealed;
+  stats.backfilledMatches = matchIds.length;
+
+  await ref.set({
+    revealedBackfillAt: admin.firestore.FieldValue.serverTimestamp(),
+    matchesProcessed: matchIds.length,
+    predictionsRevealed: revealed,
+  }, { merge: true });
+
+  try {
+    await db.collection('audit_log').add({
+      actorUid: 'system-cron',
+      action: 'revealedBackfill',
+      targetId: null,
+      details: { matchesProcessed: matchIds.length, predictionsRevealed: revealed },
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('audit_log write failed (backfill):', e.message);
+  }
+}
+
+// ============================================================
 // PAGRINDINĖ SYNC LOGIKA (atkartoja syncResultsFromAPI iš src/firebase.js)
 // ============================================================
 async function syncCore(db) {
@@ -124,9 +184,12 @@ async function syncCore(db) {
   const ourMatches = [];
   matchesSnap.forEach((d) => ourMatches.push({ id: d.id, ...d.data() }));
 
-  const stats = { total: apiMatches.length, matched: 0, updated: 0, created: 0, skipped: 0, unmatched: [] };
+  const stats = { total: apiMatches.length, matched: 0, updated: 0, created: 0, skipped: 0, unmatched: [], revealed: 0 };
   const batch = db.batch();
   const claimedPlaceholderIds = new Set();
+  // Match'ai, kurių predictions reikia reveal'inti (perėjimas iš upcoming → live/finished).
+  // Po pagrindinio batch commit'o atlieksim per-match predictions update batch'ais.
+  const matchesToReveal = new Set();
 
   for (const apiMatch of apiMatches) {
     const homeCode = findTeamCode(apiMatch.homeTeam);
@@ -217,6 +280,11 @@ async function syncCore(db) {
         status: apiStatusMapped,
         actualScore: apiScore,
       });
+      // Jei placeholder pildomas jau ne-upcoming statusu, reikia reveal'inti
+      // (mažai tikėtina, kad bus predictions, bet saugu)
+      if (apiStatusMapped !== 'upcoming') {
+        matchesToReveal.add(ourMatch.id);
+      }
       stats.updated++;
       continue;
     }
@@ -249,6 +317,12 @@ async function syncCore(db) {
       }
       batch.update(db.collection('matches').doc(ourMatch.id), updateData);
       stats.updated++;
+      // Jei statusas perėjo iš 'upcoming' į ką nors kitą — reveal'iname predictions.
+      // Tai būtina, kad ne-admin'ai matytų leaderboard'ą (rule branch 3:
+      // resource.data.revealed == true).
+      if (statusChanged && ourMatch.status === 'upcoming' && finalStatus !== 'upcoming') {
+        matchesToReveal.add(ourMatch.id);
+      }
     } else {
       stats.skipped++;
     }
@@ -257,6 +331,18 @@ async function syncCore(db) {
   if (stats.updated > 0 || stats.created > 0) {
     await batch.commit();
   }
+
+  // === REVEAL PREDICTIONS ===
+  // Po pagrindinio batch'o atlieksim predictions reveal'us. Daromas atskirai, nes:
+  // 1) Reikia query'inti predictions kolekciją (negali būti tame pačiame batch'e kaip writes)
+  // 2) Predictions kiekis gali viršyti 500 doc/batch limitą — chunkinam
+  stats.revealed = await revealPredictionsForMatches(db, Array.from(matchesToReveal));
+
+  // === SELF-HEALING BACKFILL ===
+  // Pirmąjį kartą po deploy'o (kai system/backfillStatus dar neegzistuoja),
+  // padarom pilną pasibaigusių/vyksta rungtynių predictions reveal'ą.
+  // Idempotent — kitos cron iteracijos praleidžia.
+  await maybeRunBackfill(db, stats);
 
   // Audit log
   try {

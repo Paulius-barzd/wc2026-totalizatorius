@@ -470,43 +470,25 @@ export function listenToUserPredictions(uid, callback) {
   });
 }
 
-// SVARBU: skaityti VISAS predictions kolekcijoje ne-admin'ams Firestore Rules NEleidžia,
-// nes egzistuoja predictions su 'upcoming' rungtynėmis (kurių rule blokuoja). Vienas
-// neperleidžiamas dokumentas atmeta visą query.
+// SVARBU dėl leaderboard'o: Firestore Rules query'iams reikalauja STATIŠKAI patenkinamos
+// sąlygos — `get()` ant matches kolekcijos rule branch'e neveikia listenToCollection
+// užklausoje (rejected su permission-denied ne-admin'ams).
 //
-// Sprendimas: query'inti TIK predictions iš pradėjusių (live/finished) rungtynių, su
-// 'where matchId in [chunk]'. Firestore 'in' palaiko iki 30 reikšmių, tad chunkinam.
-// Kai matches sąrašas pasikeičia (status persijungia), iš naujo prenumeruojama.
-export function listenToFinishedPredictions(matchIds, callback) {
-  if (!matchIds || matchIds.length === 0) {
-    callback([]);
-    return () => {};
-  }
-  const CHUNK = 30;
-  const chunks = [];
-  for (let i = 0; i < matchIds.length; i += CHUNK) {
-    chunks.push(matchIds.slice(i, i + CHUNK));
-  }
-  const perChunk = new Map();
-  const emit = () => {
+// Sprendimas: prie kiekvienos prediction'o pridedamas denormalizuotas `revealed`
+// laukas, kurį cron'as set'ina į true kai match pereina iš 'upcoming' į 'live'/'finished'
+// (žr. netlify/functions/sync-results-cron.js). Rule branch 3:
+//   resource.data.revealed == true
+// Šis predikatas patenkinamas query constraint'u `where('revealed', '==', true)`.
+export function listenToFinishedPredictions(callback) {
+  const q = query(collection(db, 'predictions'), where('revealed', '==', true));
+  return onSnapshot(q, (snap) => {
     const all = [];
-    perChunk.forEach((arr) => all.push(...arr));
+    snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
     callback(all);
-  };
-  const unsubs = chunks.map((ids, idx) => {
-    const q = query(collection(db, 'predictions'), where('matchId', 'in', ids));
-    return onSnapshot(q, (snap) => {
-      const arr = [];
-      snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
-      perChunk.set(idx, arr);
-      emit();
-    }, (err) => {
-      console.warn('listenToFinishedPredictions chunk', idx, 'denied:', err.code);
-      perChunk.set(idx, []);
-      emit();
-    });
+  }, (err) => {
+    console.warn('listenToFinishedPredictions denied:', err.code);
+    callback([]);
   });
-  return () => unsubs.forEach((u) => u());
 }
 
 export function listenToUsers(callback) {
@@ -1122,6 +1104,10 @@ export async function syncResultsFromAPI() {
   // kad du API match'ai su tuo pačiu kickoff laiku negautų to paties k slot'o
   const claimedPlaceholderIds = new Set();
 
+  // Match'ai, kurių predictions reikės reveal'inti (status perėjo iš 'upcoming'
+  // į 'live'/'finished'). Reveal'inama po pagrindinio matches batch'o.
+  const matchesToReveal = new Set();
+
   for (const apiMatch of apiMatches) {
     const homeCode = findTeamCode(apiMatch.homeTeam);
     const awayCode = findTeamCode(apiMatch.awayTeam);
@@ -1235,6 +1221,9 @@ export async function syncResultsFromAPI() {
         status: apiStatusMapped,
         actualScore: apiScore,
       });
+      if (apiStatusMapped !== 'upcoming') {
+        matchesToReveal.add(ourMatch.id);
+      }
       stats.updated++;
       continue;
     }
@@ -1268,6 +1257,9 @@ export async function syncResultsFromAPI() {
       }
       batch.update(ref, updateData);
       stats.updated++;
+      if (statusChanged && ourMatch.status === 'upcoming' && finalStatus !== 'upcoming') {
+        matchesToReveal.add(ourMatch.id);
+      }
     } else {
       stats.skipped++;
     }
@@ -1277,5 +1269,30 @@ export async function syncResultsFromAPI() {
     await batch.commit();
   }
 
+  // Reveal'inam predictions perėjusių match'ų — kad leaderboard'as iškart matytų ne-admin'ams.
+  // Be šio žingsnio cron'as pats sutvarkys per ≤15 min, bet admin'as nori instant feedback'o.
+  stats.revealed = await revealPredictionsForMatchesClient(Array.from(matchesToReveal));
+
   return stats;
+}
+
+// Klientinis (admin'o) variantas — naudoja Firestore Rules update permission.
+// Cron'as turi savo versiją su Admin SDK (sync-results-cron.js).
+async function revealPredictionsForMatchesClient(matchIds) {
+  if (!matchIds || matchIds.length === 0) return 0;
+  const BATCH_LIMIT = 500;
+  let totalRevealed = 0;
+  for (const matchId of matchIds) {
+    const q = query(collection(db, 'predictions'), where('matchId', '==', matchId));
+    const snap = await getDocs(q);
+    const docs = snap.docs.filter((d) => d.data().revealed !== true);
+    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+      const chunk = docs.slice(i, i + BATCH_LIMIT);
+      const wb = writeBatch(db);
+      chunk.forEach((d) => wb.update(d.ref, { revealed: true }));
+      await wb.commit();
+      totalRevealed += chunk.length;
+    }
+  }
+  return totalRevealed;
 }
