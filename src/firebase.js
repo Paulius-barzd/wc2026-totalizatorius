@@ -1029,7 +1029,10 @@ function shouldUpgradeStatus(current, incoming) {
 
 // Grąžina rezultatą TIK pagal pagrindinį laiką (90 min + injury), be pratęsimo ir baudinių.
 // Atkrintamosioms - Taisyklėse vertinama tik 90 min rezultatas, ne baudiniai.
-// football-data.org fullTime kartais apima baudinius - atimam.
+// football-data.org fullTime gali būti pateiktas dvejopai:
+//   1) 90 min rezultatas (paprastai) - naudoti kaip yra
+//   2) Su pridėtais baudiniais (rečiau) - atimti, bet TIK jei matematiškai pavyksta
+//      gauti galiojančias lygiąsias (nes baudiniai galimi tik po lygiųjų)
 function getRegulationScore(score) {
   if (!score) return null;
   if (score.regularTime && score.regularTime.home != null && score.regularTime.away != null) {
@@ -1039,10 +1042,11 @@ function getRegulationScore(score) {
   if (!ft || ft.home == null || ft.away == null) return null;
   if (score.duration === 'PENALTY_SHOOTOUT' && score.penalties &&
       score.penalties.home != null && score.penalties.away != null) {
-    return {
-      home: ft.home - score.penalties.home,
-      away: ft.away - score.penalties.away,
-    };
+    const h = ft.home - score.penalties.home;
+    const a = ft.away - score.penalties.away;
+    if (h >= 0 && a >= 0 && h === a) {
+      return { home: h, away: a };
+    }
   }
   return { home: ft.home, away: ft.away };
 }

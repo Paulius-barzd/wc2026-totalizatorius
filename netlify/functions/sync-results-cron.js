@@ -104,13 +104,16 @@ function getRegulationScore(score) {
   }
   const ft = score.fullTime;
   if (!ft || ft.home == null || ft.away == null) return null;
-  // Jei rungtynė ėjo iki baudinių, fullTime gali apimti pridėtus baudinius - atimam
+  // Jei rungtynė ėjo iki baudinių IR fullTime atrodo kaip suma (regulation + penalties),
+  // atimam baudinius. Atimimas saugomas tik jei rezultatas yra galiojantis lygiosios
+  // (baudiniai vyksta tik po lygiųjų), kitu atveju fullTime jau yra 90 min rezultatas.
   if (score.duration === 'PENALTY_SHOOTOUT' && score.penalties &&
       score.penalties.home != null && score.penalties.away != null) {
-    return {
-      home: ft.home - score.penalties.home,
-      away: ft.away - score.penalties.away,
-    };
+    const h = ft.home - score.penalties.home;
+    const a = ft.away - score.penalties.away;
+    if (h >= 0 && a >= 0 && h === a) {
+      return { home: h, away: a };
+    }
   }
   return { home: ft.home, away: ft.away };
 }
