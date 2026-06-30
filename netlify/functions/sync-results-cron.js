@@ -205,6 +205,96 @@ async function maybeRunBackfill(db, stats) {
 }
 
 // ============================================================
+// CONSOLIDATION: surasti wcXXXX dublikatus tuščiems kXX placeholder'iams
+// ============================================================
+// Cron'as kartais sukurdavo wcXXXX rungtynę, kai pirmąjį kartą pamatė knockout match'ą
+// API'jaus pusėje su kickoff, kuris nesutapo (±24h) su esamais tuščiais kXX. Dabar
+// (po smarter matching diegimo) tas neturėtų pasikartoti, bet jei jau yra anksčiau
+// sukurtų wcXXXX dublikatų — sutvarkome juos automatiškai:
+//   1) Surandam wcXXXX su užpildytomis komandomis
+//   2) Patikrinam ar yra tuščias kXX tame pačiame etape (jei yra - tai dublikatas)
+//   3) Perkeliam wcXXXX duomenis į kXX
+//   4) Migruojam visus predictions (matchId pakeičia iš wcXXXX į kXX)
+//   5) Ištriname wcXXXX
+async function consolidateKnockoutDuplicates(db, stats) {
+  const matchesSnap = await db.collection('matches').get();
+  const all = [];
+  matchesSnap.forEach((d) => all.push({ id: d.id, ...d.data() }));
+
+  const wcMatches = all.filter((m) =>
+    m.id && m.id.startsWith('wc') && m.home && m.away && m.stage && m.stage !== 'group'
+  );
+  if (wcMatches.length === 0) return;
+
+  let consolidated = 0;
+  let predsMigrated = 0;
+  const claimedKx = new Set();
+
+  for (const wcMatch of wcMatches) {
+    // Rasti tuščią kXX placeholder'į tame etape (kuris dar nepasiimtas šitoj iteracijoj)
+    const emptyKx = all.find((m) =>
+      m.id && m.id.startsWith('k') &&
+      m.stage === wcMatch.stage &&
+      m.home === null && m.away === null &&
+      !claimedKx.has(m.id)
+    );
+    if (!emptyKx) continue;
+    claimedKx.add(emptyKx.id);
+
+    // 1) Atnaujinti kXX su wcMatch duomenimis
+    const updateData = {
+      home: wcMatch.home,
+      away: wcMatch.away,
+      kickoff: wcMatch.kickoff,
+      kickoffMs: wcMatch.kickoffMs,
+      status: wcMatch.status,
+      actualScore: wcMatch.actualScore || null,
+    };
+    if (wcMatch.outcome !== undefined) updateData.outcome = wcMatch.outcome;
+    if (wcMatch.revealed !== undefined) updateData.revealed = wcMatch.revealed;
+    await db.collection('matches').doc(emptyKx.id).update(updateData);
+
+    // 2) Migruoti predictions: matchId wcXXXX -> kXX
+    const predsSnap = await db.collection('predictions')
+      .where('matchId', '==', wcMatch.id).get();
+    if (!predsSnap.empty) {
+      const predBatch = db.batch();
+      predsSnap.forEach((p) => predBatch.update(p.ref, { matchId: emptyKx.id }));
+      await predBatch.commit();
+      predsMigrated += predsSnap.size;
+    }
+
+    // 3) Ištrinti wcMatch
+    await db.collection('matches').doc(wcMatch.id).delete();
+    consolidated++;
+
+    // Atnaujinti lokalų `all` masyvą - kad sekantis wcMatch tame pačiame iteration'e
+    // matytų jau užpildytą kXX (kad neimtų to paties)
+    const idx = all.findIndex((m) => m.id === emptyKx.id);
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], home: wcMatch.home, away: wcMatch.away };
+    }
+  }
+
+  stats.consolidated = consolidated;
+  stats.predsConsolidated = predsMigrated;
+
+  if (consolidated > 0) {
+    try {
+      await db.collection('audit_log').add({
+        actorUid: 'system-cron',
+        action: 'consolidateKnockoutDuplicates',
+        targetId: null,
+        details: { consolidated, predsMigrated },
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn('audit_log write failed (consolidate):', e.message);
+    }
+  }
+}
+
+// ============================================================
 // PAGRINDINĖ SYNC LOGIKA (atkartoja syncResultsFromAPI iš src/firebase.js)
 // ============================================================
 async function syncCore(db) {
@@ -223,12 +313,17 @@ async function syncCore(db) {
     return { total: 0, matched: 0, updated: 0, created: 0, skipped: 0, unmatched: [] };
   }
 
-  // 2) Gauti mūsų matches iš Firestore
+  const stats = { total: apiMatches.length, matched: 0, updated: 0, created: 0, skipped: 0, unmatched: [], revealed: 0, consolidated: 0, predsConsolidated: 0 };
+
+  // 1.5) Pirma sutvarkyti esamus wcXXXX dublikatus tuštiems kXX placeholder'iams.
+  // Idempotent: jei nieko nėra, nieko nedaro. Vykdoma PRIEŠ matches load'ą, kad
+  // toliau eitume su jau sutvarkyta būsena.
+  await consolidateKnockoutDuplicates(db, stats);
+
+  // 2) Gauti mūsų matches iš Firestore (po consolidation, kad būtų aktuali būsena)
   const matchesSnap = await db.collection('matches').get();
   const ourMatches = [];
   matchesSnap.forEach((d) => ourMatches.push({ id: d.id, ...d.data() }));
-
-  const stats = { total: apiMatches.length, matched: 0, updated: 0, created: 0, skipped: 0, unmatched: [], revealed: 0 };
   const batch = db.batch();
   const claimedPlaceholderIds = new Set();
   // Match'ai, kurių predictions reikia reveal'inti (perėjimas iš upcoming → live/finished).
@@ -244,24 +339,42 @@ async function syncCore(db) {
     }
 
     const apiTime = new Date(apiMatch.utcDate).getTime();
-    let ourMatch = ourMatches.find((m) => {
-      if (m.home !== homeCode || m.away !== awayCode) return false;
-      const ourTime = new Date(m.kickoff).getTime();
-      return Math.abs(apiTime - ourTime) < 24 * 3600000;
-    });
+    // 1) Pirmas bandymas - rasti pagal tikslias komandas, ignoruojant kickoff laiką
+    // (FIFA gali pakeisti tvarkaraščius - svarbiausia komandų atitikimas)
+    let ourMatch = ourMatches.find((m) =>
+      m.home === homeCode && m.away === awayCode
+    );
 
     let fillingPlaceholder = false;
 
     if (!ourMatch) {
       const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
       if (internalStage && internalStage !== 'group') {
-        ourMatch = ourMatches.find((m) => {
-          if (m.stage !== internalStage) return false;
-          if (m.home !== null || m.away !== null) return false;
-          if (claimedPlaceholderIds.has(m.id)) return false;
-          const ourTime = new Date(m.kickoff).getTime();
-          return Math.abs(apiTime - ourTime) < 24 * 3600000;
-        });
+        // 2) Antras bandymas - rasti tuščią placeholder'į TAME ETAPE.
+        // Praplėstas ±7 dienų langas, kad būtų atsparu schedule pakeitimams.
+        // Prioritetas: kuo arčiau API laiko, tas placeholder'is.
+        const candidates = ourMatches
+          .filter((m) =>
+            m.stage === internalStage &&
+            m.home === null && m.away === null &&
+            !claimedPlaceholderIds.has(m.id) &&
+            m.id.startsWith('k') &&
+            Math.abs(apiTime - new Date(m.kickoff).getTime()) < 7 * 24 * 3600000
+          )
+          .sort((a, b) =>
+            Math.abs(apiTime - new Date(a.kickoff).getTime()) -
+            Math.abs(apiTime - new Date(b.kickoff).getTime())
+          );
+        ourMatch = candidates[0];
+        // Jei joks pagal laiką nepasitvirtino - imame BET KOKĮ tuščią placeholder'į tame etape
+        if (!ourMatch) {
+          ourMatch = ourMatches.find((m) =>
+            m.stage === internalStage &&
+            m.home === null && m.away === null &&
+            !claimedPlaceholderIds.has(m.id) &&
+            m.id.startsWith('k')
+          );
+        }
         if (ourMatch) {
           claimedPlaceholderIds.add(ourMatch.id);
           fillingPlaceholder = true;
