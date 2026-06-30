@@ -118,6 +118,21 @@ function getRegulationScore(score) {
   return { home: ft.home, away: ft.away };
 }
 
+// Surenkam galutinį atkrintamųjų rezultatą atskirai nuo regulation (90 min).
+// Naudojama UI'e rodyti mažu šriftu „Po baudinių: 2:3" arba „Po pratęsimo".
+// Grąžina null jei rungtynė baigėsi reguliaraus laiko metu.
+function getMatchOutcome(score) {
+  if (!score || !score.duration || score.duration === 'REGULAR') return null;
+  const outcome = { type: score.duration };
+  if (score.penalties && score.penalties.home != null && score.penalties.away != null) {
+    outcome.penalties = { home: score.penalties.home, away: score.penalties.away };
+  }
+  if (score.extraTime && score.extraTime.home != null && score.extraTime.away != null) {
+    outcome.extraTime = { home: score.extraTime.home, away: score.extraTime.away };
+  }
+  return outcome;
+}
+
 const API_STAGE_TO_INTERNAL = {
   'GROUP_STAGE': 'group',
   'LAST_32': 'round_of_32',
@@ -273,6 +288,7 @@ async function syncCore(db) {
           group: null,
           status: newStatus,
           actualScore: newScore,
+          outcome: getMatchOutcome(apiMatch.score),
         };
         batch.set(db.collection('matches').doc(newId), newMatch);
         stats.created++;
@@ -307,6 +323,7 @@ async function syncCore(db) {
         kickoffMs: apiKickoffMs,
         status: apiStatusMapped,
         actualScore: apiScore,
+        outcome: getMatchOutcome(apiMatch.score),
       });
       // Jei placeholder pildomas jau ne-upcoming statusu, reikia reveal'inti
       // (mažai tikėtina, kad bus predictions, bet saugu)
@@ -334,11 +351,14 @@ async function syncCore(db) {
 
     const statusChanged = finalStatus !== ourMatch.status;
     const scoreChanged = JSON.stringify(finalScore) !== JSON.stringify(ourMatch.actualScore);
+    const apiOutcome = getMatchOutcome(apiMatch.score);
+    const outcomeChanged = JSON.stringify(apiOutcome) !== JSON.stringify(ourMatch.outcome || null);
 
-    if (statusChanged || scoreChanged || needsKickoffMs) {
+    if (statusChanged || scoreChanged || needsKickoffMs || outcomeChanged) {
       const updateData = {};
       if (statusChanged) updateData.status = finalStatus;
       if (scoreChanged) updateData.actualScore = finalScore;
+      if (outcomeChanged) updateData.outcome = apiOutcome;
       if (needsKickoffMs) {
         updateData.kickoffMs = apiKickoffMs;
         updateData.kickoff = apiMatch.utcDate;

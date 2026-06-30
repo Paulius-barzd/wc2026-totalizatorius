@@ -1027,6 +1027,20 @@ function shouldUpgradeStatus(current, incoming) {
   return (STATUS_RANK[incoming] || 0) > (STATUS_RANK[current] || 0);
 }
 
+// Atkrintamųjų rungtynių „outcome" - tik tada, kai rungtynė ėjo iki pratęsimo ar baudinių.
+// Skirta vizualiniam atvaizdavimui ("Po baudinių: 2:3"), NE taškų skaičiavimui.
+function getMatchOutcome(score) {
+  if (!score || !score.duration || score.duration === 'REGULAR') return null;
+  const outcome = { type: score.duration };
+  if (score.penalties && score.penalties.home != null && score.penalties.away != null) {
+    outcome.penalties = { home: score.penalties.home, away: score.penalties.away };
+  }
+  if (score.extraTime && score.extraTime.home != null && score.extraTime.away != null) {
+    outcome.extraTime = { home: score.extraTime.home, away: score.extraTime.away };
+  }
+  return outcome;
+}
+
 // Grąžina rezultatą TIK pagal pagrindinį laiką (90 min + injury), be pratęsimo ir baudinių.
 // Atkrintamosioms - Taisyklėse vertinama tik 90 min rezultatas, ne baudiniai.
 // football-data.org fullTime gali būti pateiktas dvejopai:
@@ -1197,6 +1211,7 @@ export async function syncResultsFromAPI() {
           group: null, // knockout match'ai neturi grupės
           status: newStatus,
           actualScore: newScore,
+          outcome: getMatchOutcome(apiMatch.score),
         };
 
         const ref = doc(db, 'matches', newId);
@@ -1238,6 +1253,7 @@ export async function syncResultsFromAPI() {
         kickoffMs: apiKickoffMs,
         status: apiStatusMapped,
         actualScore: apiScore,
+        outcome: getMatchOutcome(apiMatch.score),
       });
       if (apiStatusMapped !== 'upcoming') {
         matchesToReveal.add(ourMatch.id);
@@ -1263,12 +1279,15 @@ export async function syncResultsFromAPI() {
 
     const statusChanged = finalStatus !== ourMatch.status;
     const scoreChanged = JSON.stringify(finalScore) !== JSON.stringify(ourMatch.actualScore);
+    const apiOutcome = getMatchOutcome(apiMatch.score);
+    const outcomeChanged = JSON.stringify(apiOutcome) !== JSON.stringify(ourMatch.outcome || null);
 
-    if (statusChanged || scoreChanged || needsKickoffMs) {
+    if (statusChanged || scoreChanged || needsKickoffMs || outcomeChanged) {
       const ref = doc(db, 'matches', ourMatch.id);
       const updateData = {};
       if (statusChanged) updateData.status = finalStatus;
       if (scoreChanged) updateData.actualScore = finalScore;
+      if (outcomeChanged) updateData.outcome = apiOutcome;
       if (needsKickoffMs) {
         updateData.kickoffMs = apiKickoffMs;
         updateData.kickoff = apiMatch.utcDate;

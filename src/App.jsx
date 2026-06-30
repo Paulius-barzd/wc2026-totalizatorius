@@ -459,6 +459,33 @@ const TeamBlock = ({ code }) => {
   );
 };
 
+// Atkrintamųjų rungtynių „outcome" mažas tekstas po pagrindinio score'o.
+// Rodo „Po baudinių: 2:3" arba „Po pratęsimo" tik kai duration != REGULAR.
+// SVARBU: spėjimų taškai skaičiuojami pagal pagrindinį laiką (match.actualScore),
+// šis tik informacinis vizualus elementas.
+const MatchOutcomeLine = ({ outcome }) => {
+  if (!outcome || !outcome.type || outcome.type === 'REGULAR') return null;
+  if (outcome.type === 'PENALTY_SHOOTOUT' && outcome.penalties) {
+    return (
+      <span className="text-[10px] text-[#845641] mt-1 whitespace-nowrap">
+        Po baudinių: {outcome.penalties.home}:{outcome.penalties.away}
+      </span>
+    );
+  }
+  if (outcome.type === 'EXTRA_TIME' && outcome.extraTime) {
+    return (
+      <span className="text-[10px] text-[#845641] mt-1 whitespace-nowrap">
+        Po pratęsimo: {outcome.extraTime.home}:{outcome.extraTime.away}
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] text-[#845641] mt-1">
+      Po pratęsimo
+    </span>
+  );
+};
+
 const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
   const isLocked = match.status !== 'upcoming';
   const tu = timeUntil(match.kickoff);
@@ -547,6 +574,7 @@ const MatchCard = ({ match, prediction, onUpdatePrediction }) => {
               <span className="font-mono text-xs text-[#845641]">vs</span>
             </div>
           )}
+          <MatchOutcomeLine outcome={match.outcome} />
         </div>
         <TeamBlock code={match.away} />
       </div>
@@ -3129,6 +3157,11 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
           ) : null}
         </div>
       </div>
+      {match.outcome && match.outcome.type && match.outcome.type !== 'REGULAR' && (
+        <div className="mt-1 text-center">
+          <MatchOutcomeLine outcome={match.outcome} />
+        </div>
+      )}
       {!isLocked && !noTeams && hasChanges && (
         <button onClick={handleSave} disabled={saving}
           style={{ background: 'linear-gradient(135deg, #9A6B52 0%, #5C3E2E 100%)', color: '#ffffff' }}
