@@ -3123,27 +3123,69 @@ function findR32MatchByTeam(teamCode, matches) {
   );
 }
 
+// FALLBACK: kai BOTH sides of 1/8 placeholder are empty (cron dar nepriskyrė nei vienos
+// komandos), naudojam šitą mapping'ą paskelbti, kuri 1/16 pora maitina šitą slot'ą.
+// Tvarka: [home_pair, away_pair].
+//   k17 = M90 (CAN/MAR slot)     - 07/04 17:00Z
+//   k18 = M89 (PAR/SWE-FRA slot) - 07/04 21:00Z
+//   k19 = M94 (USA/BIH+BEL/SEN)  - 07/05 16:00Z
+//   k20 = M91 (BRA/CIV-NOR)      - 07/05 20:00Z
+//   k21 = M92 (MEX-ECU+ENG-COD)  - 07/06 ...
+//   k22 = M93 (POR-CRO+ESP-AUT)  - 07/06 ...
+//   k23 = M95 (AUS-EGY+COL-GHA)  - 07/07 ...
+//   k24 = M96 (SUI-ALG+ARG-CPV)  - 07/07 ...
+// PASTABA: jei mapping neteisingas - placeholder rodys neteisingus kandidatus, bet
+// kai cron'as priskirs komandas, dinaminis pakrovimas pataisys tikslų rodymą.
+const KX_TO_R32_PAIR = {
+  k17: ['k01', 'k04'],
+  k18: ['k03', 'k06'],
+  k19: ['k10', 'k09'],
+  k20: ['k02', 'k05'],
+  k21: ['k07', 'k08'],
+  k22: ['k12', 'k11'],
+  k23: ['k14', 'k16'],
+  k24: ['k13', 'k15'],
+};
+
+// Atvaizduoti 1/16 šaltinio porą kaip "TeamA / TeamB laim."
+function formatR32Source(r32Id, matches) {
+  const r32 = matches.find((m) => m.id === r32Id);
+  if (!r32 || !r32.home || !r32.away) return null;
+  const hT = teamsByCode[r32.home];
+  const aT = teamsByCode[r32.away];
+  if (!hT || !aT) return null;
+  return `${hT.name} / ${aT.name} laim.`;
+}
+
 // Dinaminis placeholder'is - rodo „TeamA / TeamB laim." pagal FIFA bracket struktūrą.
-// Veikia, kai placeholder'is yra 1/8 finale ir bent viena komanda žinoma.
+// Du atvejai:
+//   1) Viena komanda žinoma -> per ją randam pora ir rodom kitos pusės kandidatus
+//   2) Abi pusės tuščios -> per kX→pair mapping'ą rodom kandidatus iš anksto
 function getDynamicPlaceholder(match, side, matches) {
   if (!matches || match.stage !== 'round_of_16') return null;
   const knownTeam = side === 'home' ? match.away : match.home;
-  if (!knownTeam) return null;
 
-  const knownSourceR32 = findR32MatchByTeam(knownTeam, matches);
-  if (!knownSourceR32) return null;
+  // Atvejis 1: bent viena komanda žinoma
+  if (knownTeam) {
+    const knownSourceR32 = findR32MatchByTeam(knownTeam, matches);
+    if (knownSourceR32) {
+      const pairR32Id = findRound16Pair(knownSourceR32.id);
+      if (pairR32Id) {
+        const result = formatR32Source(pairR32Id, matches);
+        if (result) return result;
+      }
+    }
+  }
 
-  const pairR32Id = findRound16Pair(knownSourceR32.id);
-  if (!pairR32Id) return null;
+  // Atvejis 2: abi pusės tuščios - naudojam kX→pair mapping'ą
+  const sourcePair = KX_TO_R32_PAIR[match.id];
+  if (sourcePair) {
+    const sideIndex = side === 'home' ? 0 : 1;
+    const result = formatR32Source(sourcePair[sideIndex], matches);
+    if (result) return result;
+  }
 
-  const pairR32 = matches.find((m) => m.id === pairR32Id);
-  if (!pairR32 || !pairR32.home || !pairR32.away) return null;
-
-  const hT = teamsByCode[pairR32.home];
-  const aT = teamsByCode[pairR32.away];
-  if (!hT || !aT) return null;
-
-  return `${hT.name} / ${aT.name} laim.`;
+  return null;
 }
 
 const getPlaceholder = (match, side, matches) => {
