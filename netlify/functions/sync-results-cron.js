@@ -330,84 +330,89 @@ async function syncCore(db) {
   // Po pagrindinio batch commit'o atlieksim per-match predictions update batch'ais.
   const matchesToReveal = new Set();
 
+  // Skaitiklis dalinai užpildytų placeholder'ių (žinome vieną komandą, kita dar nepatvirtinta)
+  stats.partial = 0;
+
   for (const apiMatch of apiMatches) {
     const homeCode = findTeamCode(apiMatch.homeTeam);
     const awayCode = findTeamCode(apiMatch.awayTeam);
-    if (!homeCode || !awayCode) {
-      stats.unmatched.push(`${apiMatch.homeTeam?.name || '?'} vs ${apiMatch.awayTeam?.name || '?'}`);
-      continue;
-    }
-
     const apiTime = new Date(apiMatch.utcDate).getTime();
-    // 1) Pirmas bandymas - rasti pagal tikslias komandas, ignoruojant kickoff laiką
-    // (FIFA gali pakeisti tvarkaraščius - svarbiausia komandų atitikimas)
-    let ourMatch = ourMatches.find((m) =>
-      m.home === homeCode && m.away === awayCode
-    );
+    const apiKickoffMs = apiTime;
+    const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
+
+    // === MATCH FINDING - 3 stadijos prioriteto tvarka ===
+    // 0) Stabili identifikacija per apiMatchId (jei jau anksčiau apdorojom)
+    let ourMatch = ourMatches.find((m) => m.apiMatchId === apiMatch.id);
+
+    // 1) Exact teams match (tik jei API turi abi komandas)
+    if (!ourMatch && homeCode && awayCode) {
+      ourMatch = ourMatches.find((m) =>
+        m.home === homeCode && m.away === awayCode
+      );
+    }
 
     let fillingPlaceholder = false;
 
-    if (!ourMatch) {
-      const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
-      if (internalStage && internalStage !== 'group') {
-        // 2) Antras bandymas - rasti tuščią placeholder'į TAME ETAPE.
-        // Praplėstas ±7 dienų langas, kad būtų atsparu schedule pakeitimams.
-        // Prioritetas: kuo arčiau API laiko, tas placeholder'is.
-        const candidates = ourMatches
-          .filter((m) =>
-            m.stage === internalStage &&
-            m.home === null && m.away === null &&
-            !claimedPlaceholderIds.has(m.id) &&
-            m.id.startsWith('k') &&
-            Math.abs(apiTime - new Date(m.kickoff).getTime()) < 7 * 24 * 3600000
-          )
-          .sort((a, b) =>
-            Math.abs(apiTime - new Date(a.kickoff).getTime()) -
-            Math.abs(apiTime - new Date(b.kickoff).getTime())
-          );
-        ourMatch = candidates[0];
-        // Jei joks pagal laiką nepasitvirtino - imame BET KOKĮ tuščią placeholder'į tame etape
-        if (!ourMatch) {
-          ourMatch = ourMatches.find((m) =>
-            m.stage === internalStage &&
-            m.home === null && m.away === null &&
-            !claimedPlaceholderIds.has(m.id) &&
-            m.id.startsWith('k')
-          );
-        }
-        if (ourMatch) {
-          claimedPlaceholderIds.add(ourMatch.id);
-          fillingPlaceholder = true;
-        }
+    // 2) Tuščias placeholder atkrintamosiose - bet TIK jei žinom bent vieną komandą
+    // (jokio prasmės pildyti placeholder'į su null + null)
+    if (!ourMatch && internalStage && internalStage !== 'group' && (homeCode || awayCode)) {
+      const candidates = ourMatches
+        .filter((m) =>
+          m.stage === internalStage &&
+          m.home === null && m.away === null &&
+          !claimedPlaceholderIds.has(m.id) &&
+          m.id.startsWith('k') &&
+          Math.abs(apiTime - new Date(m.kickoff).getTime()) < 7 * 24 * 3600000
+        )
+        .sort((a, b) =>
+          Math.abs(apiTime - new Date(a.kickoff).getTime()) -
+          Math.abs(apiTime - new Date(b.kickoff).getTime())
+        );
+      ourMatch = candidates[0];
+      if (!ourMatch) {
+        ourMatch = ourMatches.find((m) =>
+          m.stage === internalStage &&
+          m.home === null && m.away === null &&
+          !claimedPlaceholderIds.has(m.id) &&
+          m.id.startsWith('k')
+        );
+      }
+      if (ourMatch) {
+        claimedPlaceholderIds.add(ourMatch.id);
+        fillingPlaceholder = true;
       }
     }
 
-    if (!ourMatch) {
-      const internalStage = API_STAGE_TO_INTERNAL[apiMatch.stage];
-      if (internalStage && internalStage !== 'group') {
-        const newId = `wc${apiMatch.id}`;
-        const newStatus = mapApiStatus(apiMatch.status);
-        let newScore = null;
-        if (newStatus === 'finished' || newStatus === 'live') {
-          newScore = getRegulationScore(apiMatch.score);
-        }
-        const newMatch = {
-          id: newId,
-          home: homeCode,
-          away: awayCode,
-          kickoff: apiMatch.utcDate,
-          kickoffMs: new Date(apiMatch.utcDate).getTime(),
-          stage: internalStage,
-          group: null,
-          status: newStatus,
-          actualScore: newScore,
-          outcome: getMatchOutcome(apiMatch.score),
-        };
-        batch.set(db.collection('matches').doc(newId), newMatch);
-        stats.created++;
-        continue;
+    // 3) Kraštutinis variantas - sukurti wcXXXX (tik kai TIKRAI nieko netinka)
+    if (!ourMatch && internalStage && internalStage !== 'group' && homeCode && awayCode) {
+      const newId = `wc${apiMatch.id}`;
+      const newStatus = mapApiStatus(apiMatch.status);
+      let newScore = null;
+      if (newStatus === 'finished' || newStatus === 'live') {
+        newScore = getRegulationScore(apiMatch.score);
       }
-      stats.unmatched.push(`${apiMatch.homeTeam?.name} vs ${apiMatch.awayTeam?.name}`);
+      batch.set(db.collection('matches').doc(newId), {
+        id: newId,
+        apiMatchId: apiMatch.id,
+        home: homeCode,
+        away: awayCode,
+        kickoff: apiMatch.utcDate,
+        kickoffMs: apiKickoffMs,
+        stage: internalStage,
+        group: null,
+        status: newStatus,
+        actualScore: newScore,
+        outcome: getMatchOutcome(apiMatch.score),
+      });
+      stats.created++;
+      continue;
+    }
+
+    if (!ourMatch) {
+      // Nieko nepasiekem - jei API turi bent vieną komandą, tai problema; jei abi null,
+      // tiesiog ignoruojam (būsimas turo etapas, nieko netraukam į statistiką)
+      if (!homeCode && !awayCode) continue;
+      stats.unmatched.push(`${apiMatch.homeTeam?.name || '?'} vs ${apiMatch.awayTeam?.name || '?'}`);
       continue;
     }
 
@@ -416,7 +421,6 @@ async function syncCore(db) {
     let apiScore = null;
     if (apiStatusMapped === 'finished' || apiStatusMapped === 'live') {
       apiScore = getRegulationScore(apiMatch.score);
-      // Fallback į halftime jei nieko kito nėra
       if (!apiScore) {
         const htHome = apiMatch.score?.halfTime?.home;
         const htAway = apiMatch.score?.halfTime?.away;
@@ -424,64 +428,44 @@ async function syncCore(db) {
       }
     }
 
-    const apiKickoffMs = new Date(apiMatch.utcDate).getTime();
-    const needsKickoffMs = ourMatch.kickoffMs == null || ourMatch.kickoffMs !== apiKickoffMs;
-
-    if (fillingPlaceholder) {
-      // Naujai pildomas placeholder - imti pilnai iš API (mūsų pusėje dar nieko nėra)
-      batch.update(db.collection('matches').doc(ourMatch.id), {
-        home: homeCode,
-        away: awayCode,
-        kickoff: apiMatch.utcDate,
-        kickoffMs: apiKickoffMs,
-        status: apiStatusMapped,
-        actualScore: apiScore,
-        outcome: getMatchOutcome(apiMatch.score),
-      });
-      // Jei placeholder pildomas jau ne-upcoming statusu, reikia reveal'inti
-      // (mažai tikėtina, kad bus predictions, bet saugu)
-      if (apiStatusMapped !== 'upcoming') {
-        matchesToReveal.add(ourMatch.id);
-      }
-      stats.updated++;
-      continue;
-    }
-
-    // === MONOTONIŠKAS STATUS UPGRADE - apsauga nuo API vėlavimo ===
-    // Cron'as NIEKADA negrąžina status atgal (live -> upcoming, finished -> live ir t.t.).
-    // Jei API atneša "senesnį" statusą, paliekam mūsų esamą reikšmę.
-    // Tai išsprendžia atvejį, kai admin'as rankomis pažymėjo 'live' bet API dar rodo 'TIMED'.
+    // === MONOTONIŠKAS STATUS UPGRADE ===
     const finalStatus = shouldUpgradeStatus(ourMatch.status, apiStatusMapped)
       ? apiStatusMapped
       : ourMatch.status;
 
-    // Score'o atnaujinimas tik kai status persijungia į live/finished IR API atneša rezultatą.
-    // Jei API neturi rezultato (null), bet mes turime - neperrašom į null.
+    // Score'o atnaujinimas tik kai status live/finished IR API atneša rezultatą.
     let finalScore = ourMatch.actualScore;
     if ((finalStatus === 'live' || finalStatus === 'finished') && apiScore != null) {
       finalScore = apiScore;
     }
 
-    const statusChanged = finalStatus !== ourMatch.status;
-    const scoreChanged = JSON.stringify(finalScore) !== JSON.stringify(ourMatch.actualScore);
     const apiOutcome = getMatchOutcome(apiMatch.score);
-    const outcomeChanged = JSON.stringify(apiOutcome) !== JSON.stringify(ourMatch.outcome || null);
 
-    if (statusChanged || scoreChanged || needsKickoffMs || outcomeChanged) {
-      const updateData = {};
-      if (statusChanged) updateData.status = finalStatus;
-      if (scoreChanged) updateData.actualScore = finalScore;
-      if (outcomeChanged) updateData.outcome = apiOutcome;
-      if (needsKickoffMs) {
-        updateData.kickoffMs = apiKickoffMs;
-        updateData.kickoff = apiMatch.utcDate;
-      }
+    // === BUILD UPDATE DATA - tik tie laukai, kurie pasikeitė ===
+    // SVARBU: partial team support - jei API neturi komandos, NEperrašom null'u esamos
+    const updateData = {};
+    if (ourMatch.apiMatchId !== apiMatch.id) updateData.apiMatchId = apiMatch.id;
+    if (homeCode && ourMatch.home !== homeCode) updateData.home = homeCode;
+    if (awayCode && ourMatch.away !== awayCode) updateData.away = awayCode;
+    if (ourMatch.kickoffMs !== apiKickoffMs) {
+      updateData.kickoffMs = apiKickoffMs;
+      updateData.kickoff = apiMatch.utcDate;
+    }
+    if (finalStatus !== ourMatch.status) updateData.status = finalStatus;
+    if (JSON.stringify(finalScore) !== JSON.stringify(ourMatch.actualScore)) {
+      updateData.actualScore = finalScore;
+    }
+    if (JSON.stringify(apiOutcome) !== JSON.stringify(ourMatch.outcome || null)) {
+      updateData.outcome = apiOutcome;
+    }
+
+    if (Object.keys(updateData).length > 0) {
       batch.update(db.collection('matches').doc(ourMatch.id), updateData);
       stats.updated++;
-      // Jei statusas perėjo iš 'upcoming' į ką nors kitą — reveal'iname predictions.
-      // Tai būtina, kad ne-admin'ai matytų leaderboard'ą (rule branch 3:
-      // resource.data.revealed == true).
-      if (statusChanged && ourMatch.status === 'upcoming' && finalStatus !== 'upcoming') {
+      // Jei pildomas placeholder bet tik viena komanda - skaičiuojam atskirai informacijai
+      if (fillingPlaceholder && (!homeCode || !awayCode)) stats.partial++;
+      // Reveal predictions kai status perėjo iš 'upcoming'
+      if (updateData.status && ourMatch.status === 'upcoming' && finalStatus !== 'upcoming') {
         matchesToReveal.add(ourMatch.id);
       }
     } else {
