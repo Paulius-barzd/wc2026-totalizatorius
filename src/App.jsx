@@ -709,24 +709,25 @@ const ModalOverlay = ({ children, onClose }) => (
   </div>
 );
 
-// Vienkartinis pranešimas po prisijungimo apie 2026-06-15 lyderlentės pataisymą.
+// Vienkartinis pranešimas po prisijungimo apie 2026-06-30 atkrintamųjų taškų pataisymą.
 // Rodomas tik kartą per naršyklę (localStorage), ir tik iki ANNOUNCEMENT_EXPIRY datos —
 // po jos net naujiems vartotojams nebepasirodys, kad nesivertė nebeaktualios žinutės.
-const ANNOUNCEMENT_ID = 'leaderboardFix_2026_06_15';
-const ANNOUNCEMENT_EXPIRY_MS = new Date('2026-06-30T00:00:00Z').getTime();
+const ANNOUNCEMENT_ID = 'knockoutScoreFix_2026_06_30';
+const ANNOUNCEMENT_EXPIRY_MS = new Date('2026-07-15T00:00:00Z').getTime();
 
 const LeaderboardFixAnnouncement = ({ onDismiss }) => (
   <ModalOverlay onClose={onDismiss}>
     <div className="flex items-center gap-2 mb-3">
       <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#54130E' }} />
       <h3 className="font-display text-base uppercase tracking-wider text-[#441514]">
-        Statistika pataisyta
+        Atkrintamųjų taškai pataisyti
       </h3>
     </div>
     <p className="text-sm text-[#845641] mb-4 whitespace-pre-line leading-relaxed">
-      {`Buvo klaida — kolegoms be administratoriaus teisių bendra įskaita rodė visus 0 taškų.\n\n`}
-      {`Tavo taškai NIEKUR nedingo ir negalėjo dingti. Sistema kiekvieną kartą juos skaičiuoja iš išsaugotų prognozių ir oficialių rezultatų — abu šie duomenys visą laiką liko nepaliesti.\n\n`}
-      {`Dabar statistika vėl rodo realią suvestinę. Atsiprašau už nepatogumus.`}
+      {`Atradome ir ištaisėme klaidą atkrintamųjų etape.\n\n`}
+      {`Pagal Taisykles, atkrintamosiose rezultatas vertinamas TIK pagal pagrindinį laiką (90 min), be baudinių serijos. Pvz. „Nyderlandai 1:1 Marokas" — tai galutinis rezultatas spėjimo skaičiavimui, nors baudiniais laimėjo Marokas (2:3).\n\n`}
+      {`Sistema kelias dienas saugojo neteisingus rezultatus (su pridėtais baudiniais), todėl kai kurių taškai buvo apskaičiuoti netiksliai. Dabar viskas pataisyta — taškai automatiškai persiskaičiavo iš tavo turimų prognozių ir teisingų rezultatų.\n\n`}
+      {`Tavo prognozės NIEKUR nedingo. Atsiprašau už nesklandumus.`}
     </p>
     <button
       onClick={onDismiss}
