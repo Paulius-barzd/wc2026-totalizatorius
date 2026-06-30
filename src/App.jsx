@@ -3073,13 +3073,91 @@ const KNOCKOUT_PLACEHOLDERS = {
   k32: { home: '½ #1 nug.', away: '½ #2 nug.' },
 };
 
-const getPlaceholder = (match, side) => {
-  // Pirma bandyti pagal match ID, fallback į "Paaiškės"
+// === FIFA 2026 BRACKET PAIRINGS ===
+// PFČ 2026 32-komandų bracket struktūra (iš oficialaus FIFA bracket).
+// 1/8 pairing'ai: kuris 1/16 maitina kurį 1/8 (per W(k0X) + W(k0Y)).
+//   M89 = M74+M77 → W(k03)+W(k06)
+//   M90 = M73+M75 → W(k01)+W(k04)
+//   M91 = M76+M78 → W(k02)+W(k05)
+//   M92 = M79+M80 → W(k07)+W(k08)
+//   M93 = M83+M84 → W(k12)+W(k11)
+//   M94 = M81+M82 → W(k10)+W(k09)
+//   M95 = M86+M88 → W(k14)+W(k16)
+//   M96 = M85+M87 → W(k13)+W(k15)
+const ROUND_OF_16_PAIRS = [
+  ['k01', 'k04'], ['k03', 'k06'], ['k02', 'k05'], ['k07', 'k08'],
+  ['k12', 'k11'], ['k10', 'k09'], ['k14', 'k16'], ['k13', 'k15'],
+];
+
+// 1/4 pairing'ai (M97-M100): kurios DVI 1/16 finalo poros susitinka 1/4
+//   M97 = M89+M90 → pora ['k03','k06'] vs pora ['k01','k04']
+//   M98 = M93+M94 → ['k12','k11'] vs ['k10','k09']
+//   M99 = M91+M92 → ['k02','k05'] vs ['k07','k08']
+//   M100 = M95+M96 → ['k14','k16'] vs ['k13','k15']
+const QUARTER_FINAL_PAIRS = [
+  [['k03', 'k06'], ['k01', 'k04']],  // M97
+  [['k12', 'k11'], ['k10', 'k09']],  // M98
+  [['k02', 'k05'], ['k07', 'k08']],  // M99
+  [['k14', 'k16'], ['k13', 'k15']],  // M100
+];
+
+// 1/2 finalo poros (M101-M102): kurios dvi 1/4 finalo grupės
+//   M101 = M97+M98 (kairė)  → 8 ankstesnių 1/16
+//   M102 = M99+M100 (dešinė) → 8 ankstesnių 1/16
+const SEMI_FINAL_GROUPS = [
+  [['k03','k06'], ['k01','k04'], ['k12','k11'], ['k10','k09']],  // M101 ancestors
+  [['k02','k05'], ['k07','k08'], ['k14','k16'], ['k13','k15']],  // M102 ancestors
+];
+
+// Surasti tos pačios 1/16 finalo poros antrą rungtynę
+function findRound16Pair(k1id) {
+  const pair = ROUND_OF_16_PAIRS.find((p) => p.includes(k1id));
+  if (!pair) return null;
+  return pair[0] === k1id ? pair[1] : pair[0];
+}
+
+// Surasti 1/16 finalo rungtynę, kurios laimėtoja yra duota komanda
+function findR32MatchByTeam(teamCode, matches) {
+  return matches.find((m) =>
+    m.stage === 'round_of_32' && (m.home === teamCode || m.away === teamCode)
+  );
+}
+
+// Dinaminis placeholder'is - rodo „TeamA / TeamB laim." pagal FIFA bracket struktūrą.
+// Veikia, kai placeholder'is yra 1/8 finale ir bent viena komanda žinoma.
+function getDynamicPlaceholder(match, side, matches) {
+  if (!matches || match.stage !== 'round_of_16') return null;
+  const knownTeam = side === 'home' ? match.away : match.home;
+  if (!knownTeam) return null;
+
+  const knownSourceR32 = findR32MatchByTeam(knownTeam, matches);
+  if (!knownSourceR32) return null;
+
+  const pairR32Id = findRound16Pair(knownSourceR32.id);
+  if (!pairR32Id) return null;
+
+  const pairR32 = matches.find((m) => m.id === pairR32Id);
+  if (!pairR32 || !pairR32.home || !pairR32.away) return null;
+
+  const hT = teamsByCode[pairR32.home];
+  const aT = teamsByCode[pairR32.away];
+  if (!hT || !aT) return null;
+
+  return `${hT.name} / ${aT.name} laim.`;
+}
+
+const getPlaceholder = (match, side, matches) => {
+  // Pirma bandyti dinaminį placeholder'į (1/8 finale jei žinoma 1 komanda)
+  if (matches) {
+    const dynamic = getDynamicPlaceholder(match, side, matches);
+    if (dynamic) return dynamic;
+  }
+  // Fallback į statinį placeholder'į
   return KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'Paaiškės';
 };
 
 // Mini match cell bracket'ui (kompaktiškas, su prognozės input'u)
-const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
+const BracketCell = ({ match, prediction, onUpdatePrediction, matches }) => {
   const isLocked = match.status !== 'upcoming';
   const home = teamsByCode[match.home];
   const away = teamsByCode[match.away];
@@ -3122,7 +3200,7 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
           <div className="flex items-center gap-1.5 min-w-0">
             <Flag code={home?.code} className="w-5 h-3.5 flex-shrink-0" />
             <span className="text-[11px] font-semibold text-[#441514] truncate">
-              {home?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'home')}</span>}
+              {home?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'home', matches)}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
@@ -3141,7 +3219,7 @@ const BracketCell = ({ match, prediction, onUpdatePrediction }) => {
           <div className="flex items-center gap-1.5 min-w-0">
             <Flag code={away?.code} className="w-5 h-3.5 flex-shrink-0" />
             <span className="text-[11px] font-semibold text-[#441514] truncate">
-              {away?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'away')}</span>}
+              {away?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'away', matches)}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
@@ -3243,7 +3321,7 @@ const BracketScreen = ({ matches, predictions, onUpdatePrediction }) => {
                 </div>
                 <div className="space-y-2 lg:flex lg:flex-col lg:justify-around lg:h-full">
                   {stageMatches.map((m) => (
-                    <BracketCell key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} />
+                    <BracketCell key={m.id} match={m} prediction={predictions[m.id]} onUpdatePrediction={onUpdatePrediction} matches={matches} />
                   ))}
                 </div>
               </div>
