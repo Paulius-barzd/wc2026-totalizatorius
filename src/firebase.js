@@ -1027,6 +1027,26 @@ function shouldUpgradeStatus(current, incoming) {
   return (STATUS_RANK[incoming] || 0) > (STATUS_RANK[current] || 0);
 }
 
+// Grąžina rezultatą TIK pagal pagrindinį laiką (90 min + injury), be pratęsimo ir baudinių.
+// Atkrintamosioms - Taisyklėse vertinama tik 90 min rezultatas, ne baudiniai.
+// football-data.org fullTime kartais apima baudinius - atimam.
+function getRegulationScore(score) {
+  if (!score) return null;
+  if (score.regularTime && score.regularTime.home != null && score.regularTime.away != null) {
+    return { home: score.regularTime.home, away: score.regularTime.away };
+  }
+  const ft = score.fullTime;
+  if (!ft || ft.home == null || ft.away == null) return null;
+  if (score.duration === 'PENALTY_SHOOTOUT' && score.penalties &&
+      score.penalties.home != null && score.penalties.away != null) {
+    return {
+      home: ft.home - score.penalties.home,
+      away: ft.away - score.penalties.away,
+    };
+  }
+  return { home: ft.home, away: ft.away };
+}
+
 // API stage → mūsų vidinis stage
 const API_STAGE_TO_INTERNAL = {
   'GROUP_STAGE': 'group',
@@ -1159,10 +1179,8 @@ export async function syncResultsFromAPI() {
         const newStatus = mapApiStatus(apiMatch.status);
 
         let newScore = null;
-        const ftHome = apiMatch.score?.fullTime?.home;
-        const ftAway = apiMatch.score?.fullTime?.away;
-        if ((newStatus === 'finished' || newStatus === 'live') && ftHome != null && ftAway != null) {
-          newScore = { home: ftHome, away: ftAway };
+        if (newStatus === 'finished' || newStatus === 'live') {
+          newScore = getRegulationScore(apiMatch.score);
         }
 
         const newMatch = {
@@ -1190,19 +1208,15 @@ export async function syncResultsFromAPI() {
 
     stats.matched++;
 
-    // Statusas + rezultatas iš API
+    // Statusas + rezultatas iš API (TIK pagrindinio laiko, be baudinių - žr. getRegulationScore)
     const apiStatusMapped = mapApiStatus(apiMatch.status);
     let apiScore = null;
-    const ftHome = apiMatch.score?.fullTime?.home;
-    const ftAway = apiMatch.score?.fullTime?.away;
-    const htHome = apiMatch.score?.halfTime?.home;
-    const htAway = apiMatch.score?.halfTime?.away;
-
-    if ((apiStatusMapped === 'finished' || apiStatusMapped === 'live')) {
-      if (ftHome != null && ftAway != null) {
-        apiScore = { home: ftHome, away: ftAway };
-      } else if (htHome != null && htAway != null) {
-        apiScore = { home: htHome, away: htAway };
+    if (apiStatusMapped === 'finished' || apiStatusMapped === 'live') {
+      apiScore = getRegulationScore(apiMatch.score);
+      if (!apiScore) {
+        const htHome = apiMatch.score?.halfTime?.home;
+        const htAway = apiMatch.score?.halfTime?.away;
+        if (htHome != null && htAway != null) apiScore = { home: htHome, away: htAway };
       }
     }
 

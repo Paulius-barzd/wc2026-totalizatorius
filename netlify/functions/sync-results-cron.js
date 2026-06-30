@@ -89,6 +89,32 @@ function shouldUpgradeStatus(current, incoming) {
   return (STATUS_RANK[incoming] || 0) > (STATUS_RANK[current] || 0);
 }
 
+// Grąžina rezultatą TIK pagal pagrindinį laiką (90 min + injury), be pratęsimo ir baudinių.
+// Reikalinga atkrintamosioms - Taisyklėse vertinamas tik 90 min rezultatas.
+// football-data.org duomenų struktūra:
+//   score.fullTime - PATEIKIA aggregated (regulation + ET + penalties) kai duration != REGULAR
+//   score.regularTime - jei egzistuoja, tai švarus 90 min rezultatas
+//   score.penalties - baudinių serijos rezultatas atskirai
+//   score.duration: REGULAR | EXTRA_TIME | PENALTY_SHOOTOUT
+function getRegulationScore(score) {
+  if (!score) return null;
+  // Pirmiausia bandyti regularTime (švariausias laukas)
+  if (score.regularTime && score.regularTime.home != null && score.regularTime.away != null) {
+    return { home: score.regularTime.home, away: score.regularTime.away };
+  }
+  const ft = score.fullTime;
+  if (!ft || ft.home == null || ft.away == null) return null;
+  // Jei rungtynė ėjo iki baudinių, fullTime gali apimti pridėtus baudinius - atimam
+  if (score.duration === 'PENALTY_SHOOTOUT' && score.penalties &&
+      score.penalties.home != null && score.penalties.away != null) {
+    return {
+      home: ft.home - score.penalties.home,
+      away: ft.away - score.penalties.away,
+    };
+  }
+  return { home: ft.home, away: ft.away };
+}
+
 const API_STAGE_TO_INTERNAL = {
   'GROUP_STAGE': 'group',
   'LAST_32': 'round_of_32',
@@ -230,11 +256,9 @@ async function syncCore(db) {
       if (internalStage && internalStage !== 'group') {
         const newId = `wc${apiMatch.id}`;
         const newStatus = mapApiStatus(apiMatch.status);
-        const ftHome = apiMatch.score?.fullTime?.home;
-        const ftAway = apiMatch.score?.fullTime?.away;
         let newScore = null;
-        if ((newStatus === 'finished' || newStatus === 'live') && ftHome != null && ftAway != null) {
-          newScore = { home: ftHome, away: ftAway };
+        if (newStatus === 'finished' || newStatus === 'live') {
+          newScore = getRegulationScore(apiMatch.score);
         }
         const newMatch = {
           id: newId,
@@ -258,13 +282,14 @@ async function syncCore(db) {
     stats.matched++;
     const apiStatusMapped = mapApiStatus(apiMatch.status);
     let apiScore = null;
-    const ftHome = apiMatch.score?.fullTime?.home;
-    const ftAway = apiMatch.score?.fullTime?.away;
-    const htHome = apiMatch.score?.halfTime?.home;
-    const htAway = apiMatch.score?.halfTime?.away;
     if (apiStatusMapped === 'finished' || apiStatusMapped === 'live') {
-      if (ftHome != null && ftAway != null) apiScore = { home: ftHome, away: ftAway };
-      else if (htHome != null && htAway != null) apiScore = { home: htHome, away: htAway };
+      apiScore = getRegulationScore(apiMatch.score);
+      // Fallback į halftime jei nieko kito nėra
+      if (!apiScore) {
+        const htHome = apiMatch.score?.halfTime?.home;
+        const htAway = apiMatch.score?.halfTime?.away;
+        if (htHome != null && htAway != null) apiScore = { home: htHome, away: htAway };
+      }
     }
 
     const apiKickoffMs = new Date(apiMatch.utcDate).getTime();

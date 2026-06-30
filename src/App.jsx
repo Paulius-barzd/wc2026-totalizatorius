@@ -1423,11 +1423,28 @@ const MatchesScreen = ({ matches, predictions, onUpdatePrediction }) => {
   const [filter, setFilter] = useState('all');
 
   const filteredMatches = useMemo(() => {
-    if (filter === 'all') return matches;
-    if (filter === 'upcoming') return matches.filter((m) => m.status === 'upcoming');
-    if (filter === 'finished') return matches.filter((m) => m.status === 'finished');
-    if (filter === 'knockout') return matches.filter((m) => m.stage && m.stage !== 'group');
-    return matches.filter((m) => m.group === filter);
+    let base;
+    if (filter === 'all') base = matches;
+    else if (filter === 'upcoming') base = matches.filter((m) => m.status === 'upcoming');
+    else if (filter === 'finished') base = matches.filter((m) => m.status === 'finished');
+    else if (filter === 'knockout') base = matches.filter((m) => m.stage && m.stage !== 'group');
+    else base = matches.filter((m) => m.group === filter);
+
+    // Smart rūšiavimas (ypač "Visos" filtrui telefone, kad pradžioje matytųsi
+    // tai, kas dabar aktualu, o ne pati pirmoji turnyro rungtynė):
+    //   1) Live (vyksta dabar) — viršuje
+    //   2) Upcoming — chronologiškai (artimiausia pirmiausia)
+    //   3) Finished — atvirkščiai chronologiškai (naujausi rezultatai pirmiausia)
+    // "Baigtos" filtre tas pats principas — naujausi pirmiausia.
+    // Kituose filtruose (Būsimos, grupės A-L, Atkrintamosios) status'ai sumaišyti
+    // retai — efektyviai gausis chronologinis. Jei visų vienodas status — sorting
+    // viduje vis tiek tvarkingas.
+    const asc = (a, b) => (a.kickoff || '').localeCompare(b.kickoff || '');
+    const desc = (a, b) => (b.kickoff || '').localeCompare(a.kickoff || '');
+    const live = base.filter((m) => m.status === 'live').sort(asc);
+    const upcoming = base.filter((m) => m.status === 'upcoming').sort(asc);
+    const finished = base.filter((m) => m.status === 'finished').sort(desc);
+    return [...live, ...upcoming, ...finished];
   }, [filter, matches]);
 
   return (
