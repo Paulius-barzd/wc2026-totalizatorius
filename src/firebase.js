@@ -1028,25 +1028,39 @@ function shouldUpgradeStatus(current, incoming) {
 }
 
 // Atkrintamųjų rungtynių „outcome" - tik tada, kai rungtynė ėjo iki pratęsimo ar baudinių.
-// Skirta vizualiniam atvaizdavimui ("Po baudinių: 2:3"), NE taškų skaičiavimui.
+// Skirta vizualiniam atvaizdavimui ("Po baudinių: 2:3" / "Po pratęsimo: 3:2"),
+// NE taškų skaičiavimui.
+// extraTime saugom kaip TOTAL po pratęsimo (regulation + ET įvarčiai).
 function getMatchOutcome(score) {
   if (!score || !score.duration || score.duration === 'REGULAR') return null;
   const outcome = { type: score.duration };
   if (score.penalties && score.penalties.home != null && score.penalties.away != null) {
     outcome.penalties = { home: score.penalties.home, away: score.penalties.away };
   }
-  if (score.extraTime && score.extraTime.home != null && score.extraTime.away != null) {
-    outcome.extraTime = { home: score.extraTime.home, away: score.extraTime.away };
+  if (score.duration === 'EXTRA_TIME') {
+    const ft = score.fullTime;
+    const rt = score.regularTime;
+    if (ft && ft.home != null && ft.away != null &&
+        rt && rt.home != null && rt.away != null &&
+        (ft.home > rt.home || ft.away > rt.away)) {
+      outcome.extraTime = { home: ft.home, away: ft.away };
+    } else if (rt && rt.home != null && rt.away != null &&
+               score.extraTime && score.extraTime.home != null && score.extraTime.away != null) {
+      outcome.extraTime = {
+        home: rt.home + score.extraTime.home,
+        away: rt.away + score.extraTime.away,
+      };
+    } else if (ft && ft.home != null && ft.away != null) {
+      outcome.extraTime = { home: ft.home, away: ft.away };
+    }
   }
   return outcome;
 }
 
 // Grąžina rezultatą TIK pagal pagrindinį laiką (90 min + injury), be pratęsimo ir baudinių.
-// Atkrintamosioms - Taisyklėse vertinama tik 90 min rezultatas, ne baudiniai.
-// football-data.org fullTime gali būti pateiktas dvejopai:
-//   1) 90 min rezultatas (paprastai) - naudoti kaip yra
-//   2) Su pridėtais baudiniais (rečiau) - atimti, bet TIK jei matematiškai pavyksta
-//      gauti galiojančias lygiąsias (nes baudiniai galimi tik po lygiųjų)
+// Atkrintamosioms - Taisyklėse vertinama tik 90 min rezultatas.
+// football-data.org fullTime gali apimti pratęsimo/baudinių įvarčius - atimam juos
+// tik jei matematiškai išeina galiojančios lygiosios (ET/baudiniai galimi tik po lygiųjų).
 function getRegulationScore(score) {
   if (!score) return null;
   if (score.regularTime && score.regularTime.home != null && score.regularTime.away != null) {
@@ -1054,10 +1068,20 @@ function getRegulationScore(score) {
   }
   const ft = score.fullTime;
   if (!ft || ft.home == null || ft.away == null) return null;
+  // PENALTY_SHOOTOUT
   if (score.duration === 'PENALTY_SHOOTOUT' && score.penalties &&
       score.penalties.home != null && score.penalties.away != null) {
     const h = ft.home - score.penalties.home;
     const a = ft.away - score.penalties.away;
+    if (h >= 0 && a >= 0 && h === a) {
+      return { home: h, away: a };
+    }
+  }
+  // EXTRA_TIME
+  if (score.duration === 'EXTRA_TIME' && score.extraTime &&
+      score.extraTime.home != null && score.extraTime.away != null) {
+    const h = ft.home - score.extraTime.home;
+    const a = ft.away - score.extraTime.away;
     if (h >= 0 && a >= 0 && h === a) {
       return { home: h, away: a };
     }

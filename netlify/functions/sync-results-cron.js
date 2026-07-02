@@ -104,9 +104,8 @@ function getRegulationScore(score) {
   }
   const ft = score.fullTime;
   if (!ft || ft.home == null || ft.away == null) return null;
-  // Jei rungtynė ėjo iki baudinių IR fullTime atrodo kaip suma (regulation + penalties),
-  // atimam baudinius. Atimimas saugomas tik jei rezultatas yra galiojantis lygiosios
-  // (baudiniai vyksta tik po lygiųjų), kitu atveju fullTime jau yra 90 min rezultatas.
+  // PENALTY_SHOOTOUT: jei fullTime apima ir baudinius - atimam. Rezultatas turi būti
+  // lygiosios (baudiniai galimi tik po lygiųjų), kitaip fullTime jau yra 90 min.
   if (score.duration === 'PENALTY_SHOOTOUT' && score.penalties &&
       score.penalties.home != null && score.penalties.away != null) {
     const h = ft.home - score.penalties.home;
@@ -115,11 +114,24 @@ function getRegulationScore(score) {
       return { home: h, away: a };
     }
   }
+  // EXTRA_TIME: jei fullTime apima pratęsimo įvarčius - atimam.
+  // Regulation turi būti lygiosios (pratęsimas vyksta tik po lygiųjų), kitaip
+  // fullTime jau yra 90 min rezultatas be pratęsimo.
+  if (score.duration === 'EXTRA_TIME' && score.extraTime &&
+      score.extraTime.home != null && score.extraTime.away != null) {
+    const h = ft.home - score.extraTime.home;
+    const a = ft.away - score.extraTime.away;
+    if (h >= 0 && a >= 0 && h === a) {
+      return { home: h, away: a };
+    }
+  }
   return { home: ft.home, away: ft.away };
 }
 
 // Surenkam galutinį atkrintamųjų rezultatą atskirai nuo regulation (90 min).
-// Naudojama UI'e rodyti mažu šriftu „Po baudinių: 2:3" arba „Po pratęsimo".
+// Naudojama UI'e rodyti mažu šriftu „Po baudinių: 2:3" arba „Po pratęsimo: 3:2".
+// PASTABA: extraTime saugom kaip TOTAL po pratęsimo (regulation + ET įvarčiai), ne vien
+// ET periodo įvarčiai — vartotojui prasmingiau matyti galutinį taškų skaičių.
 // Grąžina null jei rungtynė baigėsi reguliaraus laiko metu.
 function getMatchOutcome(score) {
   if (!score || !score.duration || score.duration === 'REGULAR') return null;
@@ -127,8 +139,25 @@ function getMatchOutcome(score) {
   if (score.penalties && score.penalties.home != null && score.penalties.away != null) {
     outcome.penalties = { home: score.penalties.home, away: score.penalties.away };
   }
-  if (score.extraTime && score.extraTime.home != null && score.extraTime.away != null) {
-    outcome.extraTime = { home: score.extraTime.home, away: score.extraTime.away };
+  if (score.duration === 'EXTRA_TIME') {
+    // Pirma rinktis fullTime jei tai atrodo esantis TOTAL (didesnis už regularTime)
+    const ft = score.fullTime;
+    const rt = score.regularTime;
+    if (ft && ft.home != null && ft.away != null &&
+        rt && rt.home != null && rt.away != null &&
+        (ft.home > rt.home || ft.away > rt.away)) {
+      outcome.extraTime = { home: ft.home, away: ft.away };
+    } else if (rt && rt.home != null && rt.away != null &&
+               score.extraTime && score.extraTime.home != null && score.extraTime.away != null) {
+      // Antraip: regulation + ET įvarčiai
+      outcome.extraTime = {
+        home: rt.home + score.extraTime.home,
+        away: rt.away + score.extraTime.away,
+      };
+    } else if (ft && ft.home != null && ft.away != null) {
+      // Paskutinis fallback'as - tik fullTime
+      outcome.extraTime = { home: ft.home, away: ft.away };
+    }
   }
   return outcome;
 }
