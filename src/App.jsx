@@ -3115,18 +3115,6 @@ function matchWinnerCode(m) {
   return null;
 }
 
-// Aprašyti feeder rungtynę placeholder tekstui:
-//   baigta -> nugalėtojo vardas ("Portugalija")
-//   dar ne -> "TeamA / TeamB laim."
-function describeFeeder(m) {
-  if (!m || !m.home || !m.away) return null;
-  const winner = matchWinnerCode(m);
-  if (winner) return teamsByCode[winner]?.name || winner;
-  const h = teamsByCode[m.home]?.name || m.home;
-  const a = teamsByCode[m.away]?.name || m.away;
-  return `${h} / ${a} laim.`;
-}
-
 // Rasti 1/16 rungtynę pagal komandų porą
 function findR32ByTeams(teamPair, matches) {
   return matches.find((m) =>
@@ -3166,10 +3154,10 @@ function getR16Pairing(match, matches) {
   return R16_FIFA_PAIRINGS[unclaimed[pos]];
 }
 
-// Dinaminis placeholder'is pagal FIFA bracket struktūrą:
-//   1/8: "Portugalija" (jei 1/16 baigta) arba "Portugalija / Kroatija laim."
-//   1/4: pagal 1/8 porą - "Kanada / Marokas laim." kai 1/8 komandos žinomos
-function getDynamicPlaceholder(match, side, matches) {
+// Surasti rungtynę, kuri "maitina" šio placeholder'io pusę pagal FIFA bracket struktūrą:
+//   1/8 slot'ui - atitinkama 1/16 rungtynė
+//   1/4 slot'ui - atitinkama 1/8 rungtynė
+function getFeederMatch(match, side, matches) {
   if (!matches) return null;
 
   if (match.stage === 'round_of_16') {
@@ -3183,7 +3171,7 @@ function getDynamicPlaceholder(match, side, matches) {
     } else {
       feederTeams = side === 'home' ? pairing.home : pairing.away;
     }
-    return describeFeeder(findR32ByTeams(feederTeams, matches));
+    return findR32ByTeams(feederTeams, matches);
   }
 
   if (match.stage === 'quarter_final') {
@@ -3197,25 +3185,31 @@ function getDynamicPlaceholder(match, side, matches) {
     if (!r16Pairing) return null;
     // Rasti tikrą 1/8 rungtynę pagal bet kurią jos galimą komandą
     const allTeams = [...r16Pairing.home, ...r16Pairing.away];
-    const r16Match = matches.find((m) =>
+    return matches.find((m) =>
       m.stage === 'round_of_16' &&
       (allTeams.includes(m.home) || allTeams.includes(m.away))
     );
-    return describeFeeder(r16Match);
   }
 
   return null;
 }
 
-const getPlaceholder = (match, side, matches) => {
-  // Pirma bandyti dinaminį placeholder'į (1/8 finale jei žinoma 1 komanda)
-  if (matches) {
-    const dynamic = getDynamicPlaceholder(match, side, matches);
-    if (dynamic) return dynamic;
+// Placeholder informacija tuščiai bracket'o pusei:
+//   { text, code } - code užpildomas TIK kai nugalėtojas jau žinomas (vėliavai rodyti)
+function getPlaceholderInfo(match, side, matches) {
+  const feeder = getFeederMatch(match, side, matches);
+  if (feeder && feeder.home && feeder.away) {
+    const winner = matchWinnerCode(feeder);
+    if (winner) {
+      return { text: teamsByCode[winner]?.name || winner, code: winner };
+    }
+    const h = teamsByCode[feeder.home]?.name || feeder.home;
+    const a = teamsByCode[feeder.away]?.name || feeder.away;
+    return { text: `${h} / ${a} laim.`, code: null };
   }
-  // Fallback į statinį placeholder'į
-  return KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'Paaiškės';
-};
+  return { text: KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'Paaiškės', code: null };
+}
+
 
 // Mini match cell bracket'ui (kompaktiškas, su prognozės input'u)
 const BracketCell = ({ match, prediction, onUpdatePrediction, matches }) => {
@@ -3223,6 +3217,10 @@ const BracketCell = ({ match, prediction, onUpdatePrediction, matches }) => {
   const home = teamsByCode[match.home];
   const away = teamsByCode[match.away];
   const noTeams = !home || !away;
+
+  // Placeholder info tuščioms pusėms: tekstas + vėliava (kai nugalėtojas jau žinomas)
+  const phHome = !home ? getPlaceholderInfo(match, 'home', matches) : null;
+  const phAway = !away ? getPlaceholderInfo(match, 'away', matches) : null;
 
   const [localPred, setLocalPred] = useState({
     home: prediction?.home ?? 0,
@@ -3259,9 +3257,9 @@ const BracketCell = ({ match, prediction, onUpdatePrediction, matches }) => {
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Flag code={home?.code} className="w-5 h-3.5 flex-shrink-0" />
+            <Flag code={home?.code || phHome?.code} className="w-5 h-3.5 flex-shrink-0" />
             <span className="text-[11px] font-semibold text-[#441514] truncate">
-              {home?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'home', matches)}</span>}
+              {home?.name || <span className="text-[#A88A6F] italic">{phHome?.text}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
@@ -3278,9 +3276,9 @@ const BracketCell = ({ match, prediction, onUpdatePrediction, matches }) => {
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Flag code={away?.code} className="w-5 h-3.5 flex-shrink-0" />
+            <Flag code={away?.code || phAway?.code} className="w-5 h-3.5 flex-shrink-0" />
             <span className="text-[11px] font-semibold text-[#441514] truncate">
-              {away?.name || <span className="text-[#A88A6F] italic">{getPlaceholder(match, 'away', matches)}</span>}
+              {away?.name || <span className="text-[#A88A6F] italic">{phAway?.text}</span>}
             </span>
           </div>
           {(match.status === 'finished' || match.status === 'live') && match.actualScore ? (
