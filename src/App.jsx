@@ -3073,116 +3073,135 @@ const KNOCKOUT_PLACEHOLDERS = {
   k32: { home: '½ #1 nug.', away: '½ #2 nug.' },
 };
 
-// === FIFA 2026 BRACKET PAIRINGS ===
-// PFČ 2026 32-komandų bracket struktūra (iš oficialaus FIFA bracket).
-// 1/8 pairing'ai: kuris 1/16 maitina kurį 1/8 (per W(k0X) + W(k0Y)).
-//   M89 = M74+M77 → W(k03)+W(k06)
-//   M90 = M73+M75 → W(k01)+W(k04)
-//   M91 = M76+M78 → W(k02)+W(k05)
-//   M92 = M79+M80 → W(k07)+W(k08)
-//   M93 = M83+M84 → W(k12)+W(k11)
-//   M94 = M81+M82 → W(k10)+W(k09)
-//   M95 = M86+M88 → W(k14)+W(k16)
-//   M96 = M85+M87 → W(k13)+W(k15)
-const ROUND_OF_16_PAIRS = [
-  ['k01', 'k04'], ['k03', 'k06'], ['k02', 'k05'], ['k07', 'k08'],
-  ['k12', 'k11'], ['k10', 'k09'], ['k14', 'k16'], ['k13', 'k15'],
+// === FIFA 2026 BRACKET STRUKTŪRA (pagal oficialų FIFA bracket) ===
+// 1/8 pairing'ai išreikšti KOMANDOMIS (ne slot ID) - atsparu bet kokiai cron'o
+// priskirstymo tvarkai. Kiekviena pusė: dvi 1/16 finalo komandos, kurių nugalėtoja
+// patenka į šį 1/8. kickoffMs - oficialus FIFA laikas (chronologiniam priskyrimui).
+const R16_FIFA_PAIRINGS = [
+  { home: ['RSA', 'CAN'], away: ['NED', 'MAR'], kickoffMs: Date.parse('2026-07-04T17:00:00Z') }, // M90
+  { home: ['GER', 'PAR'], away: ['FRA', 'SWE'], kickoffMs: Date.parse('2026-07-04T21:00:00Z') }, // M89
+  { home: ['BRA', 'JPN'], away: ['CIV', 'NOR'], kickoffMs: Date.parse('2026-07-05T20:00:00Z') }, // M91
+  { home: ['MEX', 'ECU'], away: ['ENG', 'COD'], kickoffMs: Date.parse('2026-07-06T00:00:00Z') }, // M92
+  { home: ['POR', 'CRO'], away: ['ESP', 'AUT'], kickoffMs: Date.parse('2026-07-06T19:00:00Z') }, // M93
+  { home: ['USA', 'BIH'], away: ['BEL', 'SEN'], kickoffMs: Date.parse('2026-07-07T00:00:00Z') }, // M94
+  { home: ['AUS', 'EGY'], away: ['COL', 'GHA'], kickoffMs: Date.parse('2026-07-07T16:00:00Z') }, // M95
+  { home: ['SUI', 'ALG'], away: ['ARG', 'CPV'], kickoffMs: Date.parse('2026-07-07T20:00:00Z') }, // M96
 ];
 
-// 1/4 pairing'ai (M97-M100): kurios DVI 1/16 finalo poros susitinka 1/4
-//   M97 = M89+M90 → pora ['k03','k06'] vs pora ['k01','k04']
-//   M98 = M93+M94 → ['k12','k11'] vs ['k10','k09']
-//   M99 = M91+M92 → ['k02','k05'] vs ['k07','k08']
-//   M100 = M95+M96 → ['k14','k16'] vs ['k13','k15']
-const QUARTER_FINAL_PAIRS = [
-  [['k03', 'k06'], ['k01', 'k04']],  // M97
-  [['k12', 'k11'], ['k10', 'k09']],  // M98
-  [['k02', 'k05'], ['k07', 'k08']],  // M99
-  [['k14', 'k16'], ['k13', 'k15']],  // M100
+// 1/4 pairing'ai: indeksai į R16_FIFA_PAIRINGS.
+// M97 = W89+W90, M98 = W93+W94, M99 = W91+W92, M100 = W95+W96 (chronologine tvarka)
+const QF_FIFA_PAIRINGS = [
+  { home: 1, away: 0 },  // M97 (07-09): M89 nug. + M90 nug.
+  { home: 4, away: 5 },  // M98 (07-10): M93 nug. + M94 nug.
+  { home: 2, away: 3 },  // M99 (07-11): M91 nug. + M92 nug.
+  { home: 6, away: 7 },  // M100 (07-12): M95 nug. + M96 nug.
 ];
 
-// 1/2 finalo poros (M101-M102): kurios dvi 1/4 finalo grupės
-//   M101 = M97+M98 (kairė)  → 8 ankstesnių 1/16
-//   M102 = M99+M100 (dešinė) → 8 ankstesnių 1/16
-const SEMI_FINAL_GROUPS = [
-  [['k03','k06'], ['k01','k04'], ['k12','k11'], ['k10','k09']],  // M101 ancestors
-  [['k02','k05'], ['k07','k08'], ['k14','k16'], ['k13','k15']],  // M102 ancestors
-];
-
-// Surasti tos pačios 1/16 finalo poros antrą rungtynę
-function findRound16Pair(k1id) {
-  const pair = ROUND_OF_16_PAIRS.find((p) => p.includes(k1id));
-  if (!pair) return null;
-  return pair[0] === k1id ? pair[1] : pair[0];
+// Nustatyti baigtos rungtynės nugalėtoją. Regulation lygiųjų atveju žiūrim outcome
+// (baudiniai / pratęsimas). Grąžina komandos kodą arba null.
+function matchWinnerCode(m) {
+  if (!m || m.status !== 'finished' || !m.actualScore) return null;
+  if (m.actualScore.home > m.actualScore.away) return m.home;
+  if (m.actualScore.away > m.actualScore.home) return m.away;
+  const o = m.outcome;
+  if (o?.penalties) {
+    if (o.penalties.home > o.penalties.away) return m.home;
+    if (o.penalties.away > o.penalties.home) return m.away;
+  }
+  if (o?.extraTime) {
+    if (o.extraTime.home > o.extraTime.away) return m.home;
+    if (o.extraTime.away > o.extraTime.home) return m.away;
+  }
+  return null;
 }
 
-// Surasti 1/16 finalo rungtynę, kurios laimėtoja yra duota komanda
-function findR32MatchByTeam(teamCode, matches) {
+// Aprašyti feeder rungtynę placeholder tekstui:
+//   baigta -> nugalėtojo vardas ("Portugalija")
+//   dar ne -> "TeamA / TeamB laim."
+function describeFeeder(m) {
+  if (!m || !m.home || !m.away) return null;
+  const winner = matchWinnerCode(m);
+  if (winner) return teamsByCode[winner]?.name || winner;
+  const h = teamsByCode[m.home]?.name || m.home;
+  const a = teamsByCode[m.away]?.name || m.away;
+  return `${h} / ${a} laim.`;
+}
+
+// Rasti 1/16 rungtynę pagal komandų porą
+function findR32ByTeams(teamPair, matches) {
   return matches.find((m) =>
-    m.stage === 'round_of_32' && (m.home === teamCode || m.away === teamCode)
+    m.stage === 'round_of_32' &&
+    teamPair.includes(m.home) && teamPair.includes(m.away)
   );
 }
 
-// FALLBACK: kai BOTH sides of 1/8 placeholder are empty (cron dar nepriskyrė nei vienos
-// komandos), naudojam šitą mapping'ą paskelbti, kuri 1/16 pora maitina šitą slot'ą.
-// Tvarka: [home_pair, away_pair].
-//   k17 = M90 (CAN/MAR slot)     - 07/04 17:00Z
-//   k18 = M89 (PAR/SWE-FRA slot) - 07/04 21:00Z
-//   k19 = M94 (USA/BIH+BEL/SEN)  - 07/05 16:00Z
-//   k20 = M91 (BRA/CIV-NOR)      - 07/05 20:00Z
-//   k21 = M92 (MEX-ECU+ENG-COD)  - 07/06 ...
-//   k22 = M93 (POR-CRO+ESP-AUT)  - 07/06 ...
-//   k23 = M95 (AUS-EGY+COL-GHA)  - 07/07 ...
-//   k24 = M96 (SUI-ALG+ARG-CPV)  - 07/07 ...
-// PASTABA: jei mapping neteisingas - placeholder rodys neteisingus kandidatus, bet
-// kai cron'as priskirs komandas, dinaminis pakrovimas pataisys tikslų rodymą.
-const KX_TO_R32_PAIR = {
-  k17: ['k01', 'k04'],
-  k18: ['k03', 'k06'],
-  k19: ['k10', 'k09'],
-  k20: ['k02', 'k05'],
-  k21: ['k07', 'k08'],
-  k22: ['k12', 'k11'],
-  k23: ['k14', 'k16'],
-  k24: ['k13', 'k15'],
-};
-
-// Atvaizduoti 1/16 šaltinio porą kaip "TeamA / TeamB laim."
-function formatR32Source(r32Id, matches) {
-  const r32 = matches.find((m) => m.id === r32Id);
-  if (!r32 || !r32.home || !r32.away) return null;
-  const hT = teamsByCode[r32.home];
-  const aT = teamsByCode[r32.away];
-  if (!hT || !aT) return null;
-  return `${hT.name} / ${aT.name} laim.`;
+// Kuriai FIFA 1/8 porai priklauso šis slot'as?
+// 1) Pagal komandų identitetą (jei bent viena komanda jau priskirta) - 100% tikslu
+// 2) Tuščias slot'as: chronologinis priskyrimas tarp dar "nepretenduotų" FIFA porų
+//    ir tuščių slotų (abu rikiuojami pagal kickoff) - savaime pasitaiso, kai cron
+//    užpildo komandas ir įsijungia 1 kelias.
+function getR16Pairing(match, matches) {
+  const teams = [match.home, match.away].filter(Boolean);
+  for (const t of teams) {
+    const p = R16_FIFA_PAIRINGS.find((x) => x.home.includes(t) || x.away.includes(t));
+    if (p) return p;
+  }
+  const r16 = matches.filter((m) => m.stage === 'round_of_16');
+  const claimed = new Set();
+  r16.forEach((m) => {
+    const t = m.home || m.away;
+    if (!t) return;
+    const idx = R16_FIFA_PAIRINGS.findIndex((x) => x.home.includes(t) || x.away.includes(t));
+    if (idx >= 0) claimed.add(idx);
+  });
+  const emptySlots = r16
+    .filter((m) => !m.home && !m.away)
+    .sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+  const unclaimed = R16_FIFA_PAIRINGS
+    .map((_, i) => i)
+    .filter((i) => !claimed.has(i))
+    .sort((a, b) => R16_FIFA_PAIRINGS[a].kickoffMs - R16_FIFA_PAIRINGS[b].kickoffMs);
+  const pos = emptySlots.findIndex((m) => m.id === match.id);
+  if (pos < 0 || pos >= unclaimed.length) return null;
+  return R16_FIFA_PAIRINGS[unclaimed[pos]];
 }
 
-// Dinaminis placeholder'is - rodo „TeamA / TeamB laim." pagal FIFA bracket struktūrą.
-// Du atvejai:
-//   1) Viena komanda žinoma -> per ją randam pora ir rodom kitos pusės kandidatus
-//   2) Abi pusės tuščios -> per kX→pair mapping'ą rodom kandidatus iš anksto
+// Dinaminis placeholder'is pagal FIFA bracket struktūrą:
+//   1/8: "Portugalija" (jei 1/16 baigta) arba "Portugalija / Kroatija laim."
+//   1/4: pagal 1/8 porą - "Kanada / Marokas laim." kai 1/8 komandos žinomos
 function getDynamicPlaceholder(match, side, matches) {
-  if (!matches || match.stage !== 'round_of_16') return null;
-  const knownTeam = side === 'home' ? match.away : match.home;
+  if (!matches) return null;
 
-  // Atvejis 1: bent viena komanda žinoma
-  if (knownTeam) {
-    const knownSourceR32 = findR32MatchByTeam(knownTeam, matches);
-    if (knownSourceR32) {
-      const pairR32Id = findRound16Pair(knownSourceR32.id);
-      if (pairR32Id) {
-        const result = formatR32Source(pairR32Id, matches);
-        if (result) return result;
-      }
+  if (match.stage === 'round_of_16') {
+    const pairing = getR16Pairing(match, matches);
+    if (!pairing) return null;
+    // Jei kita pusė turi komandą - ši pusė gauna PRIEŠINGĄ FIFA porą
+    const otherTeam = side === 'home' ? match.away : match.home;
+    let feederTeams;
+    if (otherTeam) {
+      feederTeams = pairing.home.includes(otherTeam) ? pairing.away : pairing.home;
+    } else {
+      feederTeams = side === 'home' ? pairing.home : pairing.away;
     }
+    return describeFeeder(findR32ByTeams(feederTeams, matches));
   }
 
-  // Atvejis 2: abi pusės tuščios - naudojam kX→pair mapping'ą
-  const sourcePair = KX_TO_R32_PAIR[match.id];
-  if (sourcePair) {
-    const sideIndex = side === 'home' ? 0 : 1;
-    const result = formatR32Source(sourcePair[sideIndex], matches);
-    if (result) return result;
+  if (match.stage === 'quarter_final') {
+    // 4 ketvirtfinaliai chronologiškai atitinka M97-M100
+    const qf = matches
+      .filter((m) => m.stage === 'quarter_final')
+      .sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+    const pos = qf.findIndex((m) => m.id === match.id);
+    if (pos < 0 || pos >= QF_FIFA_PAIRINGS.length) return null;
+    const r16Pairing = R16_FIFA_PAIRINGS[QF_FIFA_PAIRINGS[pos][side]];
+    if (!r16Pairing) return null;
+    // Rasti tikrą 1/8 rungtynę pagal bet kurią jos galimą komandą
+    const allTeams = [...r16Pairing.home, ...r16Pairing.away];
+    const r16Match = matches.find((m) =>
+      m.stage === 'round_of_16' &&
+      (allTeams.includes(m.home) || allTeams.includes(m.away))
+    );
+    return describeFeeder(r16Match);
   }
 
   return null;
