@@ -3201,7 +3201,12 @@ function getPlaceholderInfo(match, side, matches) {
   if (feeder && feeder.home && feeder.away) {
     const winner = matchWinnerCode(feeder);
     if (winner) {
-      return { text: teamsByCode[winner]?.name || winner, code: winner };
+      // code - Flag komponentui reikalingas flagcdn kodas (team.code, pvz. 'pt'),
+      // NE mūsų vidinis raktas ('POR')
+      return {
+        text: teamsByCode[winner]?.name || winner,
+        code: teamsByCode[winner]?.code || null,
+      };
     }
     const h = teamsByCode[feeder.home]?.name || feeder.home;
     const a = teamsByCode[feeder.away]?.name || feeder.away;
