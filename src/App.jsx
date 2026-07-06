@@ -3088,15 +3088,6 @@ const R16_FIFA_PAIRINGS = [
   { home: ['SUI', 'ALG'], away: ['ARG', 'CPV'], kickoffMs: Date.parse('2026-07-07T20:00:00Z') }, // M96
 ];
 
-// 1/4 pairing'ai: indeksai į R16_FIFA_PAIRINGS.
-// M97 = W89+W90, M98 = W93+W94, M99 = W91+W92, M100 = W95+W96 (chronologine tvarka)
-const QF_FIFA_PAIRINGS = [
-  { home: 1, away: 0 },  // M97 (07-09): M89 nug. + M90 nug.
-  { home: 4, away: 5 },  // M98 (07-10): M93 nug. + M94 nug.
-  { home: 2, away: 3 },  // M99 (07-11): M91 nug. + M92 nug.
-  { home: 6, away: 7 },  // M100 (07-12): M95 nug. + M96 nug.
-];
-
 // Nustatyti baigtos rungtynės nugalėtoją. Regulation lygiųjų atveju žiūrim outcome
 // (baudiniai / pratęsimas). Grąžina komandos kodą arba null.
 function matchWinnerCode(m) {
@@ -3174,23 +3165,10 @@ function getFeederMatch(match, side, matches) {
     return findR32ByTeams(feederTeams, matches);
   }
 
-  if (match.stage === 'quarter_final') {
-    // 4 ketvirtfinaliai chronologiškai atitinka M97-M100
-    const qf = matches
-      .filter((m) => m.stage === 'quarter_final')
-      .sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
-    const pos = qf.findIndex((m) => m.id === match.id);
-    if (pos < 0 || pos >= QF_FIFA_PAIRINGS.length) return null;
-    const r16Pairing = R16_FIFA_PAIRINGS[QF_FIFA_PAIRINGS[pos][side]];
-    if (!r16Pairing) return null;
-    // Rasti tikrą 1/8 rungtynę pagal bet kurią jos galimą komandą
-    const allTeams = [...r16Pairing.home, ...r16Pairing.away];
-    return matches.find((m) =>
-      m.stage === 'round_of_16' &&
-      (allTeams.includes(m.home) || allTeams.includes(m.away))
-    );
-  }
-
+  // Ketvirtfinaliui ir vėlesniems etapams dinaminio spėjimo NEDAROM:
+  // jų feeder'iai (1/8) dar nesužaisti, o spėjimas per komandas/laiką kelia
+  // dublikatų riziką (du slot'ai gauna tas pačias komandas). Rodom statinį tekstą,
+  // kol cron'as priskirs tikras komandas iš API.
   return null;
 }
 
@@ -3212,6 +3190,7 @@ function getPlaceholderInfo(match, side, matches) {
     const a = teamsByCode[feeder.away]?.name || feeder.away;
     return { text: `${h} / ${a} laim.`, code: null };
   }
+
   return { text: KNOCKOUT_PLACEHOLDERS[match.id]?.[side] || 'Paaiškės', code: null };
 }
 
