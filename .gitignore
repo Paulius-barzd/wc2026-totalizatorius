@@ -8,3 +8,7 @@ dist/
 .DS_Store
 .firebase/
 firebase-debug.log
+
+# Eksportuoti asmens duomenys (nugalėtojų sąrašai su el. paštais) - niekada į repo
+top10-nugaletojai-*.csv
+*-nugaletojai-*.csv

@@ -3,7 +3,7 @@ import {
   Trophy, Home, Calendar, BarChart3, Lock, Settings,
   Award, Crown, Target, Star, Flame, Plus, Minus, Shield,
   ChevronRight, ChevronLeft, Radio, LogOut, Loader2,
-  AlertCircle, CheckCircle2, BookOpen, Info, Gift, Pencil, X,
+  AlertCircle, CheckCircle2, BookOpen, Info, Gift, Pencil, X, Download,
 } from 'lucide-react';
 import {
   registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount, updateOwnFullName,
@@ -3631,6 +3631,39 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
     }
   };
 
+  // TOP 10 nugalėtojai - rikiuota pagal bendrus taškus (rungtynės + turnyro prognozės).
+  const topTen = useMemo(
+    () => [...usersWithPrivate].sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 10),
+    [usersWithPrivate]
+  );
+
+  // Eksportas vyksta TIK naršyklėje: CSV sudedamas atmintyje ir atsisiunčiamas per Blob URL.
+  // Jokio tinklo užklausos, jokio trečio serverio - asmens duomenys nepalieka šio kompiuterio.
+  const handleExportTop10 = async () => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['Vieta', 'Slapyvardis', 'Vardas Pavardė', 'El. paštas', 'Padalinys', 'Taškai (viso)', 'Rungtynių tšk.', 'Turnyro tšk.'];
+    const rows = topTen.map((u, i) => [
+      i + 1, u.username || '', u.fullName || '', u.email || '',
+      u.companyName || 'Be padalinio',
+      u.points || 0, u.matchPoints || 0, u.tournamentPoints || 0,
+    ]);
+    // ﻿ (BOM) - kad Excel teisingai atpažintų lietuviškas raides.
+    const csv = '﻿' + [header, ...rows].map((r) => r.map(esc).join(';')).join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `top10-nugaletojai-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    await notify({
+      title: 'Failas atsisiųstas',
+      message: 'CSV su asmens duomenimis išsaugotas tik šiame kompiuteryje. Nekelk jo į bendrus diskus ir netalpink į postą - viešai skelbk tik slapyvardžius.',
+    });
+  };
+
   const handleToggleAdmin = async (user) => {
     const willBeAdmin = !user.isAdmin;
     if (user.uid === currentUid && !willBeAdmin) {
@@ -3688,6 +3721,53 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
             className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
             {migrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Perkelti privačius duomenis ({usersNeedingMigration})
+          </button>
+        </div>
+      )}
+
+      {/* TOP 10 nugalėtojai - apdovanojimams. Matomas tik administratoriui. */}
+      {topTen.length > 0 && (
+        <div className="card-light rounded-xl p-4" style={{ borderLeft: '3px solid #D1A974' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Trophy className="w-4 h-4 text-[#D1A974]" />
+            <div className="font-bold text-sm text-[#441514]">TOP 10 nugalėtojų</div>
+          </div>
+          <p className="text-[11px] text-[#845641] mb-3">
+            Asmens duomenys. Naudoti tik apdovanojimams — viešame poste skelbk tik slapyvardžius.
+          </p>
+
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="text-left text-[#845641]">
+                  <th className="py-1 pr-2 font-semibold">#</th>
+                  <th className="py-1 pr-2 font-semibold">Slapyvardis</th>
+                  <th className="py-1 pr-2 font-semibold">Vardas pavardė</th>
+                  <th className="py-1 pr-2 font-semibold">El. paštas</th>
+                  <th className="py-1 pr-2 font-semibold">Padalinys</th>
+                  <th className="py-1 font-semibold text-right">Tšk.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topTen.map((u, i) => (
+                  <tr key={u.uid} className="border-t border-[#441514]/8">
+                    <td className="py-1.5 pr-2 font-mono text-[#845641]">{i + 1}</td>
+                    <td className="py-1.5 pr-2 font-semibold text-[#441514] whitespace-nowrap">{u.username}</td>
+                    <td className="py-1.5 pr-2 whitespace-nowrap">{u.fullName || <span className="text-[#845641]">—</span>}</td>
+                    <td className="py-1.5 pr-2 whitespace-nowrap">{u.email || <span className="text-[#845641]">—</span>}</td>
+                    <td className="py-1.5 pr-2 whitespace-nowrap">{u.companyName || <span className="text-[#845641]">—</span>}</td>
+                    <td className="py-1.5 font-mono font-bold text-[#54130E] text-right">{u.points || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <button onClick={handleExportTop10}
+            style={{ backgroundColor: '#54130E', color: '#ffffff' }}
+            className="mt-3 w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
+            <Download className="w-3.5 h-3.5" />
+            Atsisiųsti CSV
           </button>
         </div>
       )}
@@ -4672,7 +4752,7 @@ export default function App() {
         <div className="max-w-md lg:max-w-4xl mx-auto min-h-screen px-4 pt-4">
           <AdminScreen
             matches={matches}
-            users={users}
+            users={usersWithPoints}
             companies={companies}
             tournamentResults={tournamentResults}
             allTournamentBets={allTournamentBets}
