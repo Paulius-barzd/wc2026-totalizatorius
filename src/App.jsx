@@ -3987,8 +3987,294 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
   );
 };
 
-const AdminScreen = ({ matches, users, companies, tournamentResults, allTournamentBets, currentUid, onClose }) => {
-  const [tab, setTab] = useState('matches'); // 'matches' | 'companies' | 'users'
+// ============================================================
+// ADMIN: ĮDOMIOJI STATISTIKA (postui)
+// ============================================================
+// Viskas skaičiuojama naršyklėje iš jau užkrautų duomenų. Rodmenys AGREGUOTI -
+// jokių el. paštų ar vardų/pavardžių. Slapyvardžiai naudojami sąmoningai: jie
+// ir taip vieši lyderių sąraše programoje.
+
+// Firestore Timestamp -> epoch ms (saugus fallback, jei laukas dar neatsirado).
+const toMillis = (ts) => {
+  if (!ts) return null;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  return null;
+};
+
+const AdminStatsPanel = ({ users, matches, allPredictions, allTournamentBets, tournamentResults, companies }) => {
+  const { notify, dialog } = useDialog();
+
+  const stats = useMemo(() => {
+    const matchById = new Map(matches.map((m) => [m.id, m]));
+    const finished = matches.filter((m) => m.status === 'finished' && m.actualScore);
+    const userById = new Map(users.map((u) => [u.uid, u]));
+
+    // --- Bendra apimtis ---
+    const totalPredictions = allPredictions.length;
+    const predictorIds = new Set(allPredictions.map((p) => p.userId));
+    const participants = predictorIds.size;
+    const avgPerUser = participants ? (totalPredictions / participants) : 0;
+
+    // --- Populiariausias rezultatas ir aktyviausios rungtynės ---
+    const scoreFreq = new Map();
+    const perMatch = new Map();
+    const perUser = new Map();
+    let boldest = null; // daugiausiai įvarčių turintis spėjimas
+
+    allPredictions.forEach((p) => {
+      const key = `${p.home}:${p.away}`;
+      scoreFreq.set(key, (scoreFreq.get(key) || 0) + 1);
+      perMatch.set(p.matchId, (perMatch.get(p.matchId) || 0) + 1);
+      perUser.set(p.userId, (perUser.get(p.userId) || 0) + 1);
+      const goals = (p.home || 0) + (p.away || 0);
+      if (!boldest || goals > boldest.goals) boldest = { goals, home: p.home, away: p.away };
+    });
+
+    const topScoreline = [...scoreFreq.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    const topMatchEntry = [...perMatch.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    const topMatch = topMatchEntry ? matchById.get(topMatchEntry[0]) : null;
+    const mostActiveEntry = [...perUser.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    const mostActive = mostActiveEntry ? userById.get(mostActiveEntry[0]) : null;
+
+    // --- Pataikymų tikslumas (tik pasibaigusios rungtynės) ---
+    let exact = 0, diff = 0, outcome = 0, wrong = 0, scored = 0;
+    let lastMinute = 0, timed = 0;
+
+    allPredictions.forEach((p) => {
+      const m = matchById.get(p.matchId);
+      if (!m || m.status !== 'finished' || !m.actualScore) return;
+      const r = calculatePoints({ home: p.home, away: p.away }, m.actualScore);
+      scored++;
+      if (r.type === 'exact') exact++;
+      else if (r.type === 'diff') diff++;
+      else if (r.type === 'outcome') outcome++;
+      else wrong++;
+
+      // Ar spėta paskutinę parą prieš rungtynes?
+      const sub = toMillis(p.submittedAt);
+      const ko = typeof m.kickoffMs === 'number' ? m.kickoffMs : (m.kickoff ? new Date(m.kickoff).getTime() : null);
+      if (sub && ko) {
+        timed++;
+        if (ko - sub <= 24 * 60 * 60 * 1000) lastMinute++;
+      }
+    });
+
+    const pct = (n, total) => (total ? Math.round((n / total) * 1000) / 10 : 0);
+
+    // --- Čempiono spėjimai ---
+    const championFreq = new Map();
+    allTournamentBets.forEach((b) => {
+      if (b.champion) championFreq.set(b.champion, (championFreq.get(b.champion) || 0) + 1);
+    });
+    const championRanking = [...championFreq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, count]) => ({
+        code,
+        name: teamsByCode[code]?.name || code,
+        count,
+        pct: pct(count, allTournamentBets.length),
+      }));
+    const actualChampion = tournamentResults?.champion || null;
+    const championGuessedRight = actualChampion ? (championFreq.get(actualChampion) || 0) : 0;
+
+    // --- Taškai ---
+    const pointsList = users.map((u) => u.points || 0);
+    const maxPoints = pointsList.length ? Math.max(...pointsList) : 0;
+    const avgPoints = pointsList.length
+      ? Math.round((pointsList.reduce((a, b) => a + b, 0) / pointsList.length) * 10) / 10
+      : 0;
+    const podium = [...users].sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 3);
+
+    // --- Padaliniai (vidurkis vienam dalyviui, kad dydis neiškreiptų) ---
+    const companyStats = companies.map((c) => {
+      const members = users.filter((u) => u.companyId === c.id);
+      const total = members.reduce((sum, u) => sum + (u.points || 0), 0);
+      return {
+        name: c.name,
+        members: members.length,
+        avg: members.length ? Math.round((total / members.length) * 10) / 10 : 0,
+      };
+    }).filter((c) => c.members > 0).sort((a, b) => b.avg - a.avg);
+
+    return {
+      totalPredictions, participants, registered: users.length, avgPerUser,
+      finishedCount: finished.length,
+      topScoreline, topMatch, topMatchCount: topMatchEntry?.[1] || 0,
+      mostActive, mostActiveCount: mostActiveEntry?.[1] || 0,
+      boldest,
+      exact, diff, outcome, wrong, scored,
+      exactPct: pct(exact, scored),
+      anyPointsPct: pct(exact + diff + outcome, scored),
+      lastMinutePct: pct(lastMinute, timed),
+      championRanking, actualChampion, championGuessedRight,
+      totalBets: allTournamentBets.length,
+      maxPoints, avgPoints, podium, companyStats,
+    };
+  }, [users, matches, allPredictions, allTournamentBets, tournamentResults, companies]);
+
+  // Paruoštas tekstas marketingui - tik agreguoti skaičiai ir slapyvardžiai.
+  const postText = useMemo(() => {
+    const s = stats;
+    const L = [];
+    L.push('PFČ 2026 TOTALIZATORIUS - SKAIČIAI');
+    L.push('');
+    L.push(`- Dalyvavo ${s.participants} ${pluralizeLt(s.participants, ['žmogus', 'žmonės', 'žmonių'])}`);
+    L.push(`- Iš viso atlikta ${s.totalPredictions} ${pluralizeLt(s.totalPredictions, ['spėjimas', 'spėjimai', 'spėjimų'])}`);
+    L.push(`- Vidutiniškai ${Math.round(s.avgPerUser * 10) / 10} spėjimo vienam dalyviui`);
+    if (s.topScoreline) L.push(`- Populiariausias spėtas rezultatas: ${s.topScoreline[0]} (${s.topScoreline[1]} k.)`);
+    L.push(`- Tiksliai rezultatą atspėjo ${s.exactPct}% spėjimų`);
+    L.push(`- Bent rungtynių baigtį atspėjo ${s.anyPointsPct}% spėjimų`);
+    if (s.lastMinutePct) L.push(`- ${s.lastMinutePct}% spėjimų pateikta paskutinę parą prieš rungtynes`);
+    if (s.topMatch) {
+      const h = teamsByCode[s.topMatch.home]?.name || s.topMatch.home;
+      const a = teamsByCode[s.topMatch.away]?.name || s.topMatch.away;
+      L.push(`- Daugiausiai spėjimų sulaukė ${h} - ${a} (${s.topMatchCount})`);
+    }
+    if (s.boldest) L.push(`- Drąsiausias spėjimas: ${s.boldest.home}:${s.boldest.away}`);
+    if (s.mostActive) L.push(`- Aktyviausias dalyvis: ${s.mostActive.username} (${s.mostActiveCount} spėjimų)`);
+    L.push('');
+    L.push('ČEMPIONO PROGNOZĖS');
+    s.championRanking.slice(0, 5).forEach((c) => L.push(`- ${c.name}: ${c.pct}% (${c.count})`));
+    if (s.actualChampion) {
+      const champName = teamsByCode[s.actualChampion]?.name || s.actualChampion;
+      L.push(`- Čempionu tapo ${champName} - atspėjo ${s.championGuessedRight} iš ${s.totalBets}`);
+    }
+    L.push('');
+    L.push('TAŠKAI');
+    L.push(`- Geriausias rezultatas: ${s.maxPoints} tšk.`);
+    L.push(`- Vidurkis: ${s.avgPoints} tšk.`);
+    if (s.podium.length) {
+      L.push(`- Prizininkai: ${s.podium.map((u, i) => `${i + 1}. ${u.username} (${u.points || 0})`).join(', ')}`);
+    }
+    if (s.companyStats.length) {
+      L.push('');
+      L.push('PADALINIAI (vidurkis vienam dalyviui)');
+      s.companyStats.forEach((c) => L.push(`- ${c.name}: ${c.avg} tšk. (${c.members} dal.)`));
+    }
+    return L.join('\n');
+  }, [stats]);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(postText);
+      await notify({ title: 'Nukopijuota', message: 'Tekstas atmintinėje - gali įklijuoti marketingui. Jame nėra jokių el. paštų ar vardų.' });
+    } catch (_) {
+      await notify({ title: 'Nepavyko nukopijuoti', message: 'Pažymėk tekstą lauke ir kopijuok ranka (Ctrl+C).', variant: 'danger' });
+    }
+  };
+
+  if (!stats.totalPredictions) {
+    return (
+      <div className="card-light rounded-xl p-6 text-center">
+        <p className="text-sm text-[#845641]">Spėjimų duomenų dar nėra</p>
+      </div>
+    );
+  }
+
+  const Stat = ({ label, value, hint }) => (
+    <div className="card-light rounded-xl p-3">
+      <div className="text-[10px] uppercase tracking-wider text-[#845641] mb-1">{label}</div>
+      <div className="font-display text-2xl text-[#54130E] leading-none">{value}</div>
+      {hint && <div className="text-[10px] text-[#845641] mt-1">{hint}</div>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+        <p className="text-[11px] text-[#54130E] leading-relaxed">
+          Šie skaičiai <strong>agreguoti</strong> — jokių el. paštų ar vardų/pavardžių. Rodomi tik slapyvardžiai,
+          kurie ir taip matomi viešame lyderių sąraše. Tinka perduoti marketingui.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <Stat label="Spėjimų iš viso" value={stats.totalPredictions} />
+        <Stat label="Dalyvių" value={stats.participants} hint={`iš ${stats.registered} registruotų`} />
+        <Stat label="Vidurkis vienam" value={Math.round(stats.avgPerUser * 10) / 10} hint="spėjimų" />
+        <Stat label="Tikslių" value={`${stats.exactPct}%`} hint={`${stats.exact} iš ${stats.scored}`} />
+      </div>
+
+      <div className="card-light rounded-xl p-4 space-y-2 text-xs">
+        <div className="font-bold text-sm text-[#441514] mb-1">Įdomybės</div>
+        {stats.topScoreline && (
+          <div className="flex justify-between gap-2">
+            <span className="text-[#845641]">Populiariausias rezultatas</span>
+            <span className="font-mono font-bold text-[#441514]">{stats.topScoreline[0]} ({stats.topScoreline[1]} k.)</span>
+          </div>
+        )}
+        <div className="flex justify-between gap-2">
+          <span className="text-[#845641]">Bent baigtį atspėjo</span>
+          <span className="font-mono font-bold text-[#441514]">{stats.anyPointsPct}%</span>
+        </div>
+        {stats.lastMinutePct > 0 && (
+          <div className="flex justify-between gap-2">
+            <span className="text-[#845641]">Spėta paskutinę parą</span>
+            <span className="font-mono font-bold text-[#441514]">{stats.lastMinutePct}%</span>
+          </div>
+        )}
+        {stats.topMatch && (
+          <div className="flex justify-between gap-2">
+            <span className="text-[#845641]">Populiariausios rungtynės</span>
+            <span className="font-bold text-[#441514] text-right">
+              {teamsByCode[stats.topMatch.home]?.name || stats.topMatch.home} – {teamsByCode[stats.topMatch.away]?.name || stats.topMatch.away} ({stats.topMatchCount})
+            </span>
+          </div>
+        )}
+        {stats.boldest && (
+          <div className="flex justify-between gap-2">
+            <span className="text-[#845641]">Drąsiausias spėjimas</span>
+            <span className="font-mono font-bold text-[#441514]">{stats.boldest.home}:{stats.boldest.away}</span>
+          </div>
+        )}
+        {stats.mostActive && (
+          <div className="flex justify-between gap-2">
+            <span className="text-[#845641]">Aktyviausias dalyvis</span>
+            <span className="font-bold text-[#441514]">{stats.mostActive.username} ({stats.mostActiveCount})</span>
+          </div>
+        )}
+      </div>
+
+      {stats.championRanking.length > 0 && (
+        <div className="card-light rounded-xl p-4">
+          <div className="font-bold text-sm text-[#441514] mb-2">Kas turėjo tapti čempionu?</div>
+          <div className="space-y-1.5">
+            {stats.championRanking.slice(0, 5).map((c) => (
+              <div key={c.code} className="flex items-center gap-2">
+                <div className="text-xs w-32 truncate text-[#441514]">{c.name}</div>
+                <div className="flex-1 h-2 rounded-full bg-[#441514]/8 overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${c.pct}%`, backgroundColor: c.code === stats.actualChampion ? '#D1A974' : '#54130E' }} />
+                </div>
+                <div className="font-mono text-[10px] text-[#845641] w-16 text-right">{c.pct}% ({c.count})</div>
+              </div>
+            ))}
+          </div>
+          {stats.actualChampion && (
+            <p className="text-[11px] text-[#845641] mt-2">
+              Čempionu tapo <strong>{teamsByCode[stats.actualChampion]?.name || stats.actualChampion}</strong> — atspėjo {stats.championGuessedRight} iš {stats.totalBets}.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="card-light rounded-xl p-4">
+        <div className="font-bold text-sm text-[#441514] mb-2">Paruošta postui</div>
+        <textarea readOnly value={postText} rows={14}
+          className="w-full px-3 py-2 rounded-lg bg-white border border-[#441514]/10 text-[11px] font-mono leading-relaxed focus:outline-none focus:border-[#54130E]/50" />
+        <button onClick={handleCopy}
+          style={{ backgroundColor: '#54130E', color: '#ffffff' }}
+          className="mt-2 w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]">
+          Kopijuoti tekstą
+        </button>
+      </div>
+      {dialog}
+    </div>
+  );
+};
+
+const AdminScreen = ({ matches, users, companies, tournamentResults, allTournamentBets, allPredictions, currentUid, onClose }) => {
+  const [tab, setTab] = useState('matches'); // 'matches' | 'companies' | 'users' | 'stats'
   const [seeding, setSeeding] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
   const [editForm, setEditForm] = useState({ home: 0, away: 0, status: 'upcoming' });
@@ -4139,6 +4425,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
     { id: 'results', label: 'Rezultatai' },
     { id: 'companies', label: 'Įmonės' },
     { id: 'users', label: 'Vartotojai' },
+    { id: 'stats', label: 'Statistika' },
   ];
 
   const tabSubtitle = {
@@ -4146,6 +4433,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
     results: 'Turnyro laimėtojai (čempionas, žaidėjai)',
     companies: 'Įmonių sąrašas ir dalyvių paskirstymas',
     users: 'Vartotojai, administratoriaus teisės, įmonių keitimas',
+    stats: 'Agreguota statistika postui (be asmens duomenų)',
   }[tab];
 
   return (
@@ -4175,6 +4463,8 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
         matches={matches} allTournamentBets={allTournamentBets} users={users} />}
       {tab === 'companies' && <AdminCompaniesPanel companies={companies} users={users} />}
       {tab === 'users' && <AdminUsersPanel users={users} companies={companies} currentUid={currentUid} />}
+      {tab === 'stats' && <AdminStatsPanel users={users} matches={matches} allPredictions={allPredictions}
+        allTournamentBets={allTournamentBets} tournamentResults={tournamentResults} companies={companies} />}
 
       {tab === 'matches' && (
         <>
@@ -4756,6 +5046,7 @@ export default function App() {
             companies={companies}
             tournamentResults={tournamentResults}
             allTournamentBets={allTournamentBets}
+            allPredictions={allPredictions}
             currentUid={authUser.uid}
             onClose={() => setScreen('profile')} />
         </div>
