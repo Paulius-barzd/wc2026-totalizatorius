@@ -816,34 +816,63 @@ const ModalOverlay = ({ children, onClose }) => (
   <div
     className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#441514]/60 backdrop-blur-sm"
     onClick={onClose}>
+    {/* max-h + overflow: ilgesnis turinys (pvz. turnyro pabaigos pranešimas) mažame
+        ekrane kitaip išlįstų už lango ir mygtukas taptų nepasiekiamas. */}
     <div
-      className="card-light rounded-2xl p-5 max-w-sm w-full"
+      className="card-light rounded-2xl p-5 max-w-sm w-full max-h-[90vh] overflow-y-auto"
       onClick={(e) => e.stopPropagation()}>
       {children}
     </div>
   </div>
 );
 
-// Vienkartinis pranešimas po prisijungimo apie 2026-06-30 atkrintamųjų taškų pataisymą.
-// Rodomas tik kartą per naršyklę (localStorage), ir tik iki ANNOUNCEMENT_EXPIRY datos —
-// po jos net naujiems vartotojams nebepasirodys, kad nesivertė nebeaktualios žinutės.
-const ANNOUNCEMENT_ID = 'knockoutScoreFix_2026_06_30';
-const ANNOUNCEMENT_EXPIRY_MS = new Date('2026-07-15T00:00:00Z').getTime();
+// Turnyro pabaigos pranešimas. Rodomas KASKART prisijungus (be „matyta" žymos),
+// kad žinia apie spėjimų istoriją pasiektų ir tuos, kurie pirmą kartą praspaudė
+// neskaitę. Nustoja rodytis po ANNOUNCEMENT_EXPIRY datos.
+//
+// Pakeitė 2026-06-30 atkrintamųjų taškų pranešimą, kurio galiojimas baigėsi
+// 07-15 (jis nebebuvo pasiekiamas jokiam vartotojui).
+const ANNOUNCEMENT_EXPIRY_MS = new Date('2026-08-01T00:00:00Z').getTime();
 
-const LeaderboardFixAnnouncement = ({ onDismiss }) => (
+const TournamentEndAnnouncement = ({ totalPredictions, onDismiss }) => (
   <ModalOverlay onClose={onDismiss}>
     <div className="flex items-center gap-2 mb-3">
-      <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#54130E' }} />
+      <Trophy className="w-5 h-5 flex-shrink-0" style={{ color: '#D1A974' }} />
       <h3 className="font-display text-base uppercase tracking-wider text-[#441514]">
-        Atkrintamųjų taškai pataisyti
+        Ispanija — pasaulio čempionė
       </h3>
     </div>
-    <p className="text-sm text-[#845641] mb-4 whitespace-pre-line leading-relaxed">
-      {`Atradome ir ištaisėme klaidą atkrintamųjų etape.\n\n`}
-      {`Pagal Taisykles, atkrintamosiose rezultatas vertinamas TIK pagal pagrindinį laiką (90 min), be baudinių serijos. Pvz. „Nyderlandai 1:1 Marokas" — tai galutinis rezultatas spėjimo skaičiavimui, nors baudiniais laimėjo Marokas (2:3).\n\n`}
-      {`Sistema kelias dienas saugojo neteisingus rezultatus (su pridėtais baudiniais), todėl kai kurių taškai buvo apskaičiuoti netiksliai. Dabar viskas pataisyta — taškai automatiškai persiskaičiavo iš tavo turimų prognozių ir teisingų rezultatų.\n\n`}
-      {`Tavo prognozės NIEKUR nedingo. Atsiprašau už nesklandumus.`}
-    </p>
+
+    <div className="space-y-3 mb-4 text-sm text-[#845641] leading-relaxed">
+      <p>
+        Baigėsi PFČ 2026, o kartu ir mūsų totalizatorius. Sveikiname Ispaniją, iškovojusią čempionų titulą.
+      </p>
+      {totalPredictions > 0 && (
+        <p>
+          Ačiū visiems dalyvavusiems — kartu atlikote{' '}
+          <strong className="text-[#441514]">{totalPredictions}</strong>{' '}
+          {pluralizeLt(totalPredictions, ['spėjimą', 'spėjimus', 'spėjimų'])}.
+        </p>
+      )}
+
+      <div className="rounded-lg p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+        <div className="font-bold text-[#441514] text-xs uppercase tracking-wider mb-1.5">
+          Kaip pasitikrinti taškus
+        </div>
+        <p className="text-[13px]">
+          Lyderių sąraše paspausk ant bet kurio dalyvio — atsivers visa jo spėjimų istorija:
+          kiekvienos rungtynės, ką spėjo, koks buvo tikras rezultatas ir kiek taškų už tai skirta.
+          Apačioje matysi, kaip susidarė galutinė suma. Pasitikrinti gali ir save, ir kolegas.
+        </p>
+      </div>
+
+      <p className="text-[12px]">
+        Taškai: tikslus rezultatas +5 · įvarčių skirtumas +3 · atspėta baigtis +2 ·
+        čempionas +25 · kiekviena žaidėjų kategorija +15. Skaičiuojama automatiškai,
+        rankiniu būdu taškai nekoreguojami.
+      </p>
+    </div>
+
     <button
       onClick={onDismiss}
       style={{ backgroundColor: '#54130E', color: '#ffffff' }}
@@ -5284,8 +5313,8 @@ export default function App() {
     bestGoalkeeper: '',
     bestYoungPlayer: '',
   });
-  // Vienkartinis lyderlentės pataisymo pranešimas (žr. LeaderboardFixAnnouncement).
-  const [showLeaderboardAnnouncement, setShowLeaderboardAnnouncement] = useState(false);
+  // Vienkartinis turnyro pabaigos pranešimas (žr. TournamentEndAnnouncement).
+  const [showAnnouncement, setShowAnnouncement] = useState(false);
 
   // Listen to auth state
   useEffect(() => {
@@ -5352,25 +5381,15 @@ export default function App() {
     return listenToCompanies(setCompanies);
   }, []);
 
-  // Vienkartinis pranešimas apie lyderlentės pataisymą - rodyti tik užkrovus profilį,
-  // jei (a) terminas dar nepasibaigė, (b) localStorage flag'as dar nenustatytas.
+  // Turnyro pabaigos pranešimas - rodomas kaskart užkrovus profilį (t. y. kiekvieno
+  // prisijungimo metu), kol nepraėjo terminas. Sąmoningai be localStorage žymos.
   useEffect(() => {
     if (!userProfile) return;
     if (Date.now() > ANNOUNCEMENT_EXPIRY_MS) return;
-    try {
-      const seen = localStorage.getItem(`seen_${ANNOUNCEMENT_ID}`);
-      if (!seen) setShowLeaderboardAnnouncement(true);
-    } catch (_) {
-      // localStorage neprieinama (private mode + lockdown) - praleisti
-    }
+    setShowAnnouncement(true);
   }, [userProfile?.uid]);
 
-  const dismissLeaderboardAnnouncement = () => {
-    try {
-      localStorage.setItem(`seen_${ANNOUNCEMENT_ID}`, '1');
-    } catch (_) {}
-    setShowLeaderboardAnnouncement(false);
-  };
+  const dismissAnnouncement = () => setShowAnnouncement(false);
 
   // Calculate points for all users (match prognosis + tournament prognosis)
   const usersWithPoints = useMemo(() => {
@@ -5579,8 +5598,10 @@ export default function App() {
         </nav>
       </div>
       {dialog}
-      {showLeaderboardAnnouncement && (
-        <LeaderboardFixAnnouncement onDismiss={dismissLeaderboardAnnouncement} />
+      {showAnnouncement && (
+        <TournamentEndAnnouncement
+          totalPredictions={allPredictions.length}
+          onDismiss={dismissAnnouncement} />
       )}
     </div>
   );
