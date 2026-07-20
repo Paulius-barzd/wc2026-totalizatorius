@@ -155,8 +155,75 @@ const timeUntil = (iso) => {
   return `${mins}m`;
 };
 
-// Normalizuoti žaidėjo vardą palyginimui (case-insensitive, trim, dvigubi space'ai)
-const normalizeName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// Raidės, kurių NFD neišskaido į raidę + diakritinį ženklą - reikia pakeisti rankomis.
+const SPECIAL_LETTERS = { ø: 'o', đ: 'd', ð: 'd', ł: 'l', ß: 'ss', æ: 'ae', œ: 'oe', þ: 'th', ı: 'i' };
+
+// Normalizuoti žaidėjo vardą palyginimui.
+// Nuimame diakritinius ženklus (Simón -> simon, Mbappé -> mbappe), skyrybą
+// (O'Brien / Nunez-Perez) ir dvigubus tarpus. Be šito žmogus, parašęs vardą be
+// lietuviškai neįprasto ženklo, negaudavo taškų nors atspėjo teisingai.
+// U+0300..U+036F - kombinuojami diakritiniai ženklai, kuriuos NFD atskiria nuo raidės.
+// Rašoma per RegExp konstruktorių, kad kode liktų aiškūs kodai, o ne nematomi simboliai.
+const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
+
+const normalizeName = (s) => (s || '')
+  .toLowerCase()
+  .replace(/[øđðłßæœþı]/g, (c) => SPECIAL_LETTERS[c] || c)
+  .normalize('NFD')               // é -> e + kombinuojamas kirtis
+  .replace(COMBINING_MARKS, '')   // nuimti kirčius PRIEŠ skyrybos valymą
+  .replace(/[^a-z0-9\s]/g, ' ')   // brūkšneliai, apostrofai, taškai -> tarpas
+  .replace(/\s+/g, ' ')
+  .trim();
+
+// Levenšteino atstumas - kiek raidžių reikia pakeisti, kad vienas žodis taptų kitu.
+const levenshtein = (a, b) => {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+};
+
+// Kiek raidžių klaidų atleidžiame. Trumpiems žodžiams - nė vienos, nes ten
+// viena raidė jau gali reikšti visai kitą žaidėją.
+const typoTolerance = (len) => (len >= 12 ? 2 : len >= 6 ? 1 : 0);
+
+const fuzzyEq = (a, b) => {
+  if (a === b) return true;
+  const tolerance = typoTolerance(Math.max(a.length, b.length));
+  if (!tolerance) return false;
+  if (Math.abs(a.length - b.length) > tolerance) return false;
+  return levenshtein(a, b) <= tolerance;
+};
+
+// Ar dalyvio įrašytas vardas atitinka teisingą atsakymą?
+// Atlaidu diakritiniams ženklams, skyrybai, raidžių dydžiui ir smulkiai rašybos
+// klaidai; taip pat užskaito, jei įrašyta tik pavardė ("Mbappe" = "Kylian Mbappe").
+const namesMatch = (a, b) => {
+  const x = normalizeName(a);
+  const y = normalizeName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (fuzzyEq(x, y)) return true;
+
+  // Vienas įrašė tik vieną žodį (dažniausiai pavardę) - ieškome jo tarp kito vardo dalių.
+  const xs = x.split(' ');
+  const ys = y.split(' ');
+  if (xs.length === 1 || ys.length === 1) {
+    const single = xs.length === 1 ? x : y;
+    const parts = xs.length === 1 ? ys : xs;
+    if (single.length >= 4 && parts.some((p) => fuzzyEq(p, single))) return true;
+  }
+  return false;
+};
 
 // Apskaičiuoja taškus už turnyro prognozę pagal admin'o suvestus rezultatus.
 // Grąžina objektą: { champion, bestPlayer, topScorer, bestGoalkeeper, bestYoungPlayer, total }
@@ -168,7 +235,7 @@ const calculateTournamentPoints = (bet, results) => {
   }
   const playerFields = ['bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer'];
   playerFields.forEach((key) => {
-    if (bet[key] && results[key] && normalizeName(bet[key]) === normalizeName(results[key])) {
+    if (bet[key] && results[key] && namesMatch(bet[key], results[key])) {
       pts[key] = 15;
     }
   });
@@ -4111,7 +4178,7 @@ const AdminResultsPanel = ({ tournamentResults, matches, allTournamentBets, user
     allTournamentBets.forEach((bet) => {
       if (form.champion && bet.champion === form.champion) counts.champion++;
       ['bestPlayer', 'topScorer', 'bestGoalkeeper', 'bestYoungPlayer'].forEach((key) => {
-        if (form[key] && bet[key] && normalizeName(bet[key]) === normalizeName(form[key])) {
+        if (form[key] && bet[key] && namesMatch(bet[key], form[key])) {
           counts[key]++;
         }
       });
