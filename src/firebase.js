@@ -491,6 +491,43 @@ export function listenToFinishedPredictions(callback) {
   });
 }
 
+// DIAGNOSTIKA (tik admin'ui) - VISI spėjimai, įskaitant neatskleistus (`revealed != true`).
+//
+// Kam reikia: lyderių sąrašas skaičiuojamas tik iš atskleistų spėjimų. Jei cron'as
+// spėjo pakeisti rungtynių statusą, bet nulūžo prieš atskleidimą, tie spėjimai lieka
+// amžinai nematomi ir žmonės tyliai netenka taškų. Ši funkcija leidžia tai pastebėti.
+//
+// Užklausa be filtro veikia adminui, nes rules šakoje `isAdmin()` nepriklauso nuo
+// dokumento turinio (toks pat principas kaip listenToUsersPrivate).
+export function listenToAllPredictionsAdmin(callback) {
+  return onSnapshot(collection(db, 'predictions'), (snap) => {
+    const all = [];
+    snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
+    callback(all);
+  }, (err) => {
+    // Ne admin - tyliai grąžinam tuščią, diagnostika tiesiog nerodoma.
+    console.warn('listenToAllPredictionsAdmin denied:', err.code);
+    callback([]);
+  });
+}
+
+// Atskleidžia nurodytus spėjimus (revealed -> true), kad jie grįžtų į taškų skaičiavimą.
+// Rules leidžia admin'ui keisti TIK šį lauką ir tik false -> true (firestore.rules).
+// Rašoma dalimis po 500 - Firestore batch limitas.
+export async function revealPredictionsByIds(predictionIds) {
+  const ids = Array.from(new Set(predictionIds || []));
+  if (ids.length === 0) return 0;
+
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500);
+    const batch = writeBatch(db);
+    chunk.forEach((id) => batch.update(doc(db, 'predictions', id), { revealed: true }));
+    await batch.commit();
+  }
+  await logAudit('revealPredictionsManual', null, { count: ids.length });
+  return ids.length;
+}
+
 export function listenToUsers(callback) {
   return onSnapshot(collection(db, 'users'), (snap) => {
     const users = [];

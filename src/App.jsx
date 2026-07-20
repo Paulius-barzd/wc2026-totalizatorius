@@ -11,6 +11,7 @@ import {
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToFinishedPredictions, listenToUsers, listenToCompanies,
   listenToUsersPrivate, migrateUsersToPrivateSchema,
+  listenToAllPredictionsAdmin, revealPredictionsByIds,
   listenToAllTournamentBets, listenToTournamentResults, saveTournamentResults,
   updateMatch, seedDemoMatches, seedWC2026Matches, deleteDemoMatches, syncResultsFromAPI, migrateAddKickoffMs,
   createCompany, updateCompany, deleteCompany, setUserAdmin, setUserCompany,
@@ -3863,17 +3864,87 @@ const AdminCompaniesPanel = ({ companies, users }) => {
 
 // === ADMIN: VARTOTOJŲ VALDYMAS ===
 
-const AdminUsersPanel = ({ users, companies, currentUid }) => {
+const AdminUsersPanel = ({ users, companies, currentUid, matches }) => {
   const { confirm, notify, dialog } = useDialog();
   const [busyUid, setBusyUid] = useState(null);
   const [search, setSearch] = useState('');
   const [privateMap, setPrivateMap] = useState({});
   const [migrating, setMigrating] = useState(false);
+  const [rawPredictions, setRawPredictions] = useState([]);
+  const [repairing, setRepairing] = useState(false);
 
   // Listen to users_private (admin'as turi access pagal Firestore Rules)
   useEffect(() => {
     return listenToUsersPrivate(setPrivateMap);
   }, []);
+
+  // VISI spėjimai (ir neatskleisti) - reikia diagnostikai žemiau.
+  useEffect(() => {
+    return listenToAllPredictionsAdmin(setRawPredictions);
+  }, []);
+
+  // === DIAGNOSTIKA: prarasti taškai ===
+  // Lyderių sąrašas mato tik `revealed == true` spėjimus. Jei rungtynės pasibaigė,
+  // bet spėjimas liko neatskleistas, žmogus tyliai neteko taškų. Randame tokius.
+  const hidden = useMemo(() => {
+    const finishedById = new Map(
+      (matches || [])
+        .filter((m) => m.status === 'finished' && m.actualScore)
+        .map((m) => [m.id, m])
+    );
+
+    const rows = (rawPredictions || []).filter(
+      (p) => p.revealed !== true && finishedById.has(p.matchId)
+    );
+    if (rows.length === 0) return null;
+
+    const byUser = new Map();
+    const matchIds = new Set();
+    let lostPoints = 0;
+
+    rows.forEach((p) => {
+      const m = finishedById.get(p.matchId);
+      const pts = calculatePoints({ home: p.home, away: p.away }, m.actualScore).pts;
+      lostPoints += pts;
+      matchIds.add(p.matchId);
+      const prev = byUser.get(p.userId) || { count: 0, pts: 0 };
+      byUser.set(p.userId, { count: prev.count + 1, pts: prev.pts + pts });
+    });
+
+    const userRows = [...byUser.entries()]
+      .map(([uid, v]) => ({
+        uid,
+        username: users.find((u) => u.uid === uid)?.username || uid,
+        ...v,
+      }))
+      .sort((a, b) => b.pts - a.pts);
+
+    return { ids: rows.map((p) => p.id), total: rows.length, lostPoints, matchCount: matchIds.size, userRows };
+  }, [rawPredictions, matches, users]);
+
+  const handleRepair = async () => {
+    if (!hidden) return;
+    const ok = await confirm({
+      title: 'Atskleisti pamirštus spėjimus',
+      message: `Bus atskleista ${hidden.total} spėjimų iš ${hidden.matchCount} pasibaigusių rungtynių. `
+        + `${hidden.userRows.length} dalyviams grįš iš viso ${hidden.lostPoints} taškų, todėl lyderių sąrašas pasikeis. `
+        + 'Veiksmas saugus ir negrįžtamas.',
+      confirmLabel: 'Atskleisti',
+    });
+    if (!ok) return;
+    setRepairing(true);
+    try {
+      const count = await revealPredictionsByIds(hidden.ids);
+      await notify({
+        title: 'Ištaisyta',
+        message: `Atskleista ${count} spėjimų. Lyderių sąrašas jau perskaičiuotas - patikrink Top 10 dar kartą.`,
+      });
+    } catch (err) {
+      await notify({ title: 'Klaida', message: err.message, variant: 'danger' });
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   // Sujungti public + private vartotojų duomenis
   const usersWithPrivate = useMemo(() =>
@@ -4008,6 +4079,54 @@ const AdminUsersPanel = ({ users, companies, currentUid }) => {
             {migrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Perkelti privačius duomenis ({usersNeedingMigration})
           </button>
+        </div>
+      )}
+
+      {/* DIAGNOSTIKA: spėjimai, kurie neįskaičiuoti į taškus. Rodoma tik jei problema reali. */}
+      {hidden && (
+        <div className="card-light rounded-xl p-4" style={{ borderLeft: '3px solid #B3261E' }}>
+          <div className="flex items-start gap-2 mb-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#B3261E' }} />
+            <div className="text-xs text-[#441514]">
+              <div className="font-bold mb-1">Rasta neįskaičiuotų spėjimų</div>
+              <p className="text-[11px] text-[#845641] leading-relaxed">
+                {hidden.total} {pluralizeLt(hidden.total, ['spėjimas', 'spėjimai', 'spėjimų'])} iš {hidden.matchCount}{' '}
+                pasibaigusių rungtynių liko nepažymėti kaip atskleisti, todėl į lyderių sąrašą nepateko.
+                Dėl to {hidden.userRows.length} {pluralizeLt(hidden.userRows.length, ['dalyvis', 'dalyviai', 'dalyvių'])} neteko
+                iš viso <strong>{hidden.lostPoints}</strong> {pluralizeLt(hidden.lostPoints, ['taško', 'taškų', 'taškų'])}.
+                Kol tai neištaisyta, žemiau esantis Top 10 gali būti neteisingas.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-[#441514]/4 p-2 mb-3 max-h-40 overflow-y-auto">
+            {hidden.userRows.map((r) => (
+              <div key={r.uid} className="flex items-center justify-between gap-2 text-[11px] py-0.5">
+                <span className="text-[#441514] truncate">{r.username}</span>
+                <span className="text-[#845641] whitespace-nowrap">
+                  {r.count} {pluralizeLt(r.count, ['spėjimas', 'spėjimai', 'spėjimų'])} ·{' '}
+                  <strong className="font-mono" style={{ color: '#B3261E' }}>+{r.pts}</strong> tšk.
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={handleRepair} disabled={repairing}
+            style={{ backgroundColor: '#B3261E', color: '#ffffff' }}
+            className="w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 shadow-md transition-all duration-200 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2">
+            {repairing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Atskleisti ir perskaičiuoti ({hidden.total})
+          </button>
+        </div>
+      )}
+
+      {/* Teigiamas patvirtinimas - kad matytųsi, jog patikra tikrai įvyko, o ne tyliai nulūžo. */}
+      {!hidden && rawPredictions.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl p-2.5 bg-[#2E7D32]/5 border border-[#2E7D32]/20">
+          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#2E7D32' }} />
+          <p className="text-[11px] text-[#441514]">
+            Patikrinta: visi {rawPredictions.length} spėjimai įskaičiuoti į taškus, nė vienas neprarastas.
+          </p>
         </div>
       )}
 
@@ -4748,7 +4867,7 @@ const AdminScreen = ({ matches, users, companies, tournamentResults, allTourname
       {tab === 'results' && <AdminResultsPanel tournamentResults={tournamentResults}
         matches={matches} allTournamentBets={allTournamentBets} users={users} />}
       {tab === 'companies' && <AdminCompaniesPanel companies={companies} users={users} />}
-      {tab === 'users' && <AdminUsersPanel users={users} companies={companies} currentUid={currentUid} />}
+      {tab === 'users' && <AdminUsersPanel users={users} companies={companies} currentUid={currentUid} matches={matches} />}
       {tab === 'stats' && <AdminStatsPanel users={users} matches={matches} allPredictions={allPredictions}
         allTournamentBets={allTournamentBets} tournamentResults={tournamentResults} companies={companies} />}
 
