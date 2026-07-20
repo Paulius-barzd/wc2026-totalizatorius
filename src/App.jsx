@@ -100,13 +100,32 @@ const STAGE_LABELS = {
 // HELPERS
 // ============================================================
 
+// Įvarčių reikšmė -> skaičius, arba null jei jos apskritai nėra.
+// Svarbu: `{ home: null, away: null }` yra truthy objektas, tad be šito patikrinimo
+// rungtynės be įvesto rezultato duotų `null - null === 0` ir visi, spėję lygiąsias,
+// gautų taškus už neįvykusį rezultatą.
+const toScore = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 const calculatePoints = (predicted, actual) => {
   if (!predicted || !actual) return { pts: 0, type: null };
-  if (predicted.home === actual.home && predicted.away === actual.away) {
+
+  const pHome = toScore(predicted.home);
+  const pAway = toScore(predicted.away);
+  const aHome = toScore(actual.home);
+  const aAway = toScore(actual.away);
+  if (pHome === null || pAway === null || aHome === null || aAway === null) {
+    return { pts: 0, type: null };
+  }
+
+  if (pHome === aHome && pAway === aAway) {
     return { pts: 5, type: 'exact' };
   }
-  const pDiff = predicted.home - predicted.away;
-  const aDiff = actual.home - actual.away;
+  const pDiff = pHome - pAway;
+  const aDiff = aHome - aAway;
   if (pDiff === aDiff) return { pts: 3, type: 'diff' };
   const sameOutcome =
     (pDiff > 0 && aDiff > 0) ||
@@ -4450,6 +4469,9 @@ const AdminStatsPanel = ({ users, matches, allPredictions, allTournamentBets, to
       const m = matchById.get(p.matchId);
       if (!m || m.status !== 'finished' || !m.actualScore) return;
       const r = calculatePoints({ home: p.home, away: p.away }, m.actualScore);
+      // type === null reiškia, kad rezultato reikšmių nėra - toks spėjimas neturi
+      // patekti į tikslumo procentus, kitaip jie nepagrįstai kristų.
+      if (r.type === null) return;
       scored++;
       if (r.type === 'exact') exact++;
       else if (r.type === 'diff') diff++;

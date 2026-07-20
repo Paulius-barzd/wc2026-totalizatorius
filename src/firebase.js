@@ -1293,7 +1293,9 @@ export async function syncResultsFromAPI() {
     let apiScore = null;
     if (apiStatusMapped === 'finished' || apiStatusMapped === 'live') {
       apiScore = getRegulationScore(apiMatch.score);
-      if (!apiScore) {
+      // Pusės kėlinio rezultatas - TIK vykstančioms rungtynėms (žr. sync-results-cron.js).
+      // Pasibaigusioms jis įstrigtų kaip galutinis ir pagal jį būtų skirti taškai.
+      if (!apiScore && apiStatusMapped === 'live') {
         const htHome = apiMatch.score?.halfTime?.home;
         const htAway = apiMatch.score?.halfTime?.away;
         if (htHome != null && htAway != null) apiScore = { home: htHome, away: htAway };
