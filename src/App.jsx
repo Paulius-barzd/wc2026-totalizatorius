@@ -1739,7 +1739,203 @@ const TournamentScreen = ({ userProfile, matches, tournamentBet, setTournamentBe
   );
 };
 
-const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
+// ============================================================
+// TAŠKŲ IŠKLOTINĖ (skaidrumui)
+// ============================================================
+// Parodo, iš kur susidarė kiekvieno dalyvio taškai: spėjimas, tikras rezultatas,
+// gauti taškai ir bėganti suma. Matoma visiems prisijungusiems - kitų spėjimai
+// atskleidžiami tik po rungtynių pradžios (`revealed == true` Firestore taisyklėje),
+// tad nusižiūrėti dar neįvykusių rungtynių čia neįmanoma.
+
+const POINT_TYPE_LABELS = {
+  exact: 'Tikslus rezultatas',
+  diff: 'Įvarčių skirtumas',
+  outcome: 'Baigtis',
+  wrong: 'Pro šalį',
+};
+
+// Trumpa data lentelei - Lietuvos laiku, be savaitės dienos.
+const formatShortDate = (iso) => {
+  if (!iso) return '';
+  const months = ['saus', 'vas', 'kov', 'bal', 'geg', 'birž', 'liep', 'rugp', 'rugs', 'spal', 'lapk', 'gruod'];
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Vilnius', day: 'numeric', month: 'numeric',
+  }).formatToParts(new Date(iso));
+  const get = (t) => parts.find((p) => p.type === t)?.value || '';
+  const month = parseInt(get('month'), 10) - 1;
+  return `${parseInt(get('day'), 10)} ${months[month] || ''}`;
+};
+
+const PointsBreakdownModal = ({ user, matches, allPredictions, allTournamentBets, tournamentResults, onClose }) => {
+  const data = useMemo(() => {
+    const matchById = new Map(matches.map((m) => [m.id, m]));
+
+    // Tik pasibaigusios rungtynės su įvestu rezultatu - tik už jas skiriami taškai.
+    const rows = allPredictions
+      .filter((p) => p.userId === user.uid)
+      .map((p) => ({ pred: p, match: matchById.get(p.matchId) }))
+      .filter((x) => x.match && x.match.status === 'finished' && x.match.actualScore)
+      .sort((a, b) => (a.match.kickoff || '').localeCompare(b.match.kickoff || ''));
+
+    let running = 0;
+    const matchRows = rows.map(({ pred, match }) => {
+      const r = calculatePoints({ home: pred.home, away: pred.away }, match.actualScore);
+      running += r.pts;
+      return { pred, match, pts: r.pts, type: r.type, running };
+    });
+
+    const matchTotal = running;
+
+    // Turnyro prognozės - ta pati funkcija, kuria skaičiuojamas lyderių sąrašas.
+    const bet = allTournamentBets.find((b) => b.userId === user.uid) || null;
+    const tp = calculateTournamentPoints(bet, tournamentResults);
+    const tournamentRows = [
+      { key: 'champion', label: 'Čempionas', max: 25 },
+      { key: 'bestPlayer', label: 'Geriausias žaidėjas', max: 15 },
+      { key: 'topScorer', label: 'Daugiausiai įvarčių', max: 15 },
+      { key: 'bestGoalkeeper', label: 'Geriausias vartininkas', max: 15 },
+      { key: 'bestYoungPlayer', label: 'Geriausias jaunasis', max: 15 },
+    ].map((f) => {
+      const picked = bet?.[f.key] || '';
+      const actual = tournamentResults?.[f.key] || '';
+      const display = (v) => (f.key === 'champion' ? (teamsByCode[v]?.name || v) : v);
+      return { ...f, picked: display(picked), actual: display(actual), pts: tp[f.key] || 0 };
+    });
+
+    return { matchRows, matchTotal, tournamentRows, tournamentTotal: tp.total, grandTotal: matchTotal + tp.total };
+  }, [user, matches, allPredictions, allTournamentBets, tournamentResults]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-4 bg-[#441514]/60 backdrop-blur-sm overflow-y-auto"
+      onClick={onClose}>
+      <div className="card-light rounded-2xl w-full max-w-2xl my-4" onClick={(e) => e.stopPropagation()}>
+        {/* Antraštė */}
+        <div className="flex items-center gap-3 p-4 border-b border-[#441514]/10">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-display"
+            style={{ backgroundColor: `${user.avatarColor}20`, color: user.avatarColor }}>
+            {user.avatarLetter}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-[#441514] truncate">{user.username}</div>
+            <div className="text-[11px] text-[#845641]">Kaip susidarė taškai</div>
+          </div>
+          <div className="text-right">
+            <div className="font-display text-2xl text-[#54130E] leading-none">{data.grandTotal}</div>
+            <div className="text-[9px] text-[#845641] uppercase tracking-wider">tšk.</div>
+          </div>
+          <button onClick={onClose} className="text-[#845641] hover:text-[#441514] ml-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Rungtynių spėjimai */}
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <div className="font-bold text-sm text-[#441514]">Rungtynių spėjimai</div>
+              <div className="font-mono text-xs text-[#54130E] font-bold">{data.matchTotal} tšk.</div>
+            </div>
+
+            {data.matchRows.length === 0 ? (
+              <p className="text-xs text-[#845641]">Nėra užskaitytų spėjimų.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-1 px-1">
+                <table className="w-full text-[11px] border-collapse">
+                  <thead>
+                    <tr className="text-left text-[#845641]">
+                      <th className="py-1 pr-2 font-semibold">Data</th>
+                      <th className="py-1 pr-2 font-semibold">Rungtynės</th>
+                      <th className="py-1 pr-2 font-semibold text-center">Spėjo</th>
+                      <th className="py-1 pr-2 font-semibold text-center">Rezultatas</th>
+                      <th className="py-1 pr-2 font-semibold">Už ką</th>
+                      <th className="py-1 pr-2 font-semibold text-right">Tšk.</th>
+                      <th className="py-1 font-semibold text-right">Viso</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.matchRows.map(({ pred, match, pts, type, running }) => (
+                      <tr key={pred.matchId} className="border-t border-[#441514]/8">
+                        <td className="py-1.5 pr-2 text-[#845641] whitespace-nowrap">{formatShortDate(match.kickoff)}</td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap text-[#441514]">
+                          {match.home} – {match.away}
+                        </td>
+                        <td className="py-1.5 pr-2 font-mono text-center whitespace-nowrap">{pred.home}:{pred.away}</td>
+                        <td className="py-1.5 pr-2 font-mono text-center whitespace-nowrap font-bold text-[#441514]">
+                          {match.actualScore.home}:{match.actualScore.away}
+                        </td>
+                        <td className="py-1.5 pr-2 text-[#845641] whitespace-nowrap">{POINT_TYPE_LABELS[type] || '—'}</td>
+                        <td className={`py-1.5 pr-2 font-mono text-right font-bold ${pts > 0 ? 'text-[#54130E]' : 'text-[#845641]'}`}>
+                          {pts > 0 ? `+${pts}` : '0'}
+                        </td>
+                        <td className="py-1.5 font-mono text-right text-[#845641]">{running}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Turnyro prognozės */}
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <div className="font-bold text-sm text-[#441514]">Turnyro prognozės</div>
+              <div className="font-mono text-xs text-[#54130E] font-bold">{data.tournamentTotal} tšk.</div>
+            </div>
+            <div className="overflow-x-auto -mx-1 px-1">
+              <table className="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr className="text-left text-[#845641]">
+                    <th className="py-1 pr-2 font-semibold">Kategorija</th>
+                    <th className="py-1 pr-2 font-semibold">Spėjo</th>
+                    <th className="py-1 pr-2 font-semibold">Teisingas</th>
+                    <th className="py-1 font-semibold text-right">Tšk.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.tournamentRows.map((r) => (
+                    <tr key={r.key} className="border-t border-[#441514]/8">
+                      <td className="py-1.5 pr-2 text-[#441514] whitespace-nowrap">{r.label}</td>
+                      <td className="py-1.5 pr-2 text-[#845641]">{r.picked || '—'}</td>
+                      <td className="py-1.5 pr-2 text-[#441514]">{r.actual || '—'}</td>
+                      <td className={`py-1.5 font-mono text-right font-bold ${r.pts > 0 ? 'text-[#54130E]' : 'text-[#845641]'}`}>
+                        {r.pts > 0 ? `+${r.pts}` : '0'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sudėtis */}
+          <div className="rounded-xl p-3 bg-[#54130E]/5 border border-[#54130E]/15 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-[#845641]">Rungtynių spėjimai</span>
+              <span className="font-mono text-[#441514]">{data.matchTotal}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#845641]">Turnyro prognozės</span>
+              <span className="font-mono text-[#441514]">{data.tournamentTotal}</span>
+            </div>
+            <div className="flex justify-between pt-1 border-t border-[#54130E]/15">
+              <span className="font-bold text-[#441514]">Iš viso</span>
+              <span className="font-mono font-bold text-[#54130E]">{data.grandTotal}</span>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-[#845641] leading-relaxed">
+            Taškai skaičiuojami automatiškai: tikslus rezultatas +5, įvarčių skirtumas +3, atspėta baigtis +2.
+            Čempionas +25, kiekviena žaidėjų kategorija +15. Rankiniu būdu taškai nekoreguojami.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LeaderboardScreen = ({ usersWithPoints, userProfile, matches, allPredictions, allTournamentBets, tournamentResults }) => {
+  const [breakdownUser, setBreakdownUser] = useState(null);
   const [tab, setTab] = useState('overall'); // 'overall' | 'company' | 'companies'
   const [showCompanySizes, setShowCompanySizes] = useState(false); // toggle apatinės sekcijos su įmonių dydžiais
 
@@ -1802,8 +1998,9 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
   }
 
   const renderUserRow = (u, i, isMe) => (
-    <div key={u.uid}
-      className={`flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0 ${isMe ? 'bg-[#54130E]/5' : ''}`}>
+    <button key={u.uid} type="button" onClick={() => setBreakdownUser(u)}
+      title="Peržiūrėti, kaip susidarė taškai"
+      className={`w-full text-left flex items-center gap-3 p-3 border-b border-[#441514]/8 last:border-0 transition-colors hover:bg-[#54130E]/8 ${isMe ? 'bg-[#54130E]/5' : ''}`}>
       <div className="font-display text-sm w-6 text-center text-[#845641]">{i + 1}</div>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-display text-sm"
         style={{ backgroundColor: `${u.avatarColor}20`, color: u.avatarColor }}>
@@ -1826,7 +2023,8 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
         <div className="font-mono font-bold text-[#54130E]">{u.points}</div>
         <div className="text-[9px] text-[#845641] uppercase tracking-wider">tšk.</div>
       </div>
-    </div>
+      <ChevronRight className="w-4 h-4 text-[#845641]/50 flex-shrink-0" />
+    </button>
   );
 
   const renderPodium = (users) => {
@@ -1838,7 +2036,9 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
           const heights = ['h-20', 'h-28', 'h-16'];
           const colors = ['#A88A6F', '#D1A974', '#845641'];
           return (
-            <div key={u.uid} className="flex flex-col items-center">
+            <button key={u.uid} type="button" onClick={() => setBreakdownUser(u)}
+              title="Peržiūrėti, kaip susidarė taškai"
+              className="flex flex-col items-center transition-transform hover:scale-[1.03]">
               <div className="w-12 h-12 rounded-full flex items-center justify-center font-display text-lg mb-2 bg-white"
                 style={{ color: u.avatarColor, border: `2px solid ${u.avatarColor}` }}>
                 {u.avatarLetter}
@@ -1854,7 +2054,7 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
                 }}>
                 {realIdx + 1}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -1985,12 +2185,21 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
 
       {/* TAB: BENDRA */}
       {tab === 'overall' && (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:items-start">
-          <div className="lg:col-span-2">{renderPodium(sortedUsers)}</div>
-          <div className="card-light rounded-xl overflow-hidden lg:col-span-3">
-            {sortedUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
+        <>
+          <div className="rounded-xl p-3 bg-[#54130E]/5 border border-[#54130E]/15">
+            <p className="text-[11px] text-[#54130E] leading-relaxed">
+              <span className="font-bold">Viskas atvira:</span> paspausk ant bet kurio dalyvio ir pamatysi
+              kiekvieną jo spėjimą, tikrą rezultatą ir už ką skirti taškai. Taškai skaičiuojami automatiškai.
+            </p>
           </div>
-        </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:items-start">
+            <div className="lg:col-span-2">{renderPodium(sortedUsers)}</div>
+            <div className="card-light rounded-xl overflow-hidden lg:col-span-3">
+              {sortedUsers.map((u, i) => renderUserRow(u, i, u.uid === userProfile.uid))}
+            </div>
+          </div>
+        </>
       )}
 
       {/* TAB: MANO ĮMONĖ */}
@@ -2071,6 +2280,16 @@ const LeaderboardScreen = ({ usersWithPoints, userProfile }) => {
             </div>
           )}
         </>
+      )}
+
+      {breakdownUser && (
+        <PointsBreakdownModal
+          user={breakdownUser}
+          matches={matches}
+          allPredictions={allPredictions}
+          allTournamentBets={allTournamentBets}
+          tournamentResults={tournamentResults}
+          onClose={() => setBreakdownUser(null)} />
       )}
     </div>
   );
@@ -5119,7 +5338,8 @@ export default function App() {
           {screen === 'tournament' && <TournamentScreen userProfile={userProfile} matches={matches}
             tournamentBet={tournamentBet} setTournamentBet={setTournamentBet} />}
           {screen === 'leaderboard' && <LeaderboardScreen usersWithPoints={usersWithPoints}
-            userProfile={userProfile} />}
+            userProfile={userProfile} matches={matches} allPredictions={allPredictions}
+            allTournamentBets={allTournamentBets} tournamentResults={tournamentResults} />}
           {screen === 'profile' && <ProfileScreen userProfile={userProfile} usersWithPoints={usersWithPoints}
             matches={matches} predictions={predictions} tournamentResults={tournamentResults}
             onLogout={handleLogout} onOpenAdmin={() => setScreen('admin')}
