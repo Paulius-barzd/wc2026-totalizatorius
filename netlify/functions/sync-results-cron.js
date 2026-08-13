@@ -540,7 +540,16 @@ async function syncCore(db) {
 // ============================================================
 // HANDLER + SCHEDULE
 // ============================================================
+// PROJEKTAS UŽDARYTAS (2026-07). Cron'as sustabdytas, kad nustotų rašyti į Firestore
+// (rezultatų sync, predictions reveal, audit_log) duomenų trynimo metu. Norint vėl
+// paleisti - pašalinti šį anksti-grįžtantį bloką.
+const CRON_DISABLED = true;
+
 const handler = async () => {
+  if (CRON_DISABLED) {
+    console.log('[cron sync] IŠJUNGTA – projektas baigėsi, sync nevykdomas.');
+    return { statusCode: 200, body: JSON.stringify({ disabled: true }) };
+  }
   try {
     const db = initFirebase();
     const stats = await syncCore(db);

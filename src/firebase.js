@@ -117,7 +117,14 @@ export async function checkUsernameAvailable(username) {
   }
 }
 
+// PROJEKTAS UŽDARYTAS (2026-07). Nauja registracija išjungta, kad neatsirastų naujų
+// asmens duomenų, kol vyksta duomenų trynimas. Norint vėl atidaryti - pašalinti šį bloką.
+const REGISTRATION_CLOSED = true;
+
 export async function registerUser(email, password, username, fullName, companyId, companyName, companyCode) {
+  if (REGISTRATION_CLOSED) {
+    throw new Error('Registracija uždaryta – projektas baigėsi.');
+  }
   // PRE-CHECK: greitas vardo unikalumo patikrinimas prieš auth user kūrimą.
   // Tai gražus UX - vartotojas iškart mato klaidą, nereikia laukti rollback'o.
   const uKey = usernameKey(username);
