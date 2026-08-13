@@ -6,7 +6,7 @@ import {
   AlertCircle, CheckCircle2, BookOpen, Info, Gift, Pencil, X, Download,
 } from 'lucide-react';
 import {
-  registerUser, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount, updateOwnFullName,
+  registerUser, REGISTRATION_CLOSED, loginUser, logoutUser, onAuthChange, requestPasswordReset, deleteUserAccount, updateOwnFullName,
   acceptPolicyConsent, CURRENT_POLICY_VERSION,
   getUserProfile, savePrediction, saveTournamentBet, getTournamentBet,
   listenToMatches, listenToUserPredictions, listenToFinishedPredictions, listenToUsers, listenToCompanies,
@@ -1262,6 +1262,16 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
               Pradėk spėlioti ir parodyk, kad esi geriausias
             </p>
 
+            {REGISTRATION_CLOSED ? (
+              <div className="rounded-lg p-4 bg-[#D1A974]/8 border border-[#D1A974]/30 text-center">
+                <Trophy className="w-6 h-6 mx-auto mb-2" style={{ color: '#D1A974' }} />
+                <p className="text-sm text-[#441514] font-semibold mb-1">Registracija uždaryta</p>
+                <p className="text-[13px] text-[#845641] leading-relaxed">
+                  Projektas baigėsi — nauja registracija nebegalima. Ačiū visiems dalyvavusiems!
+                </p>
+              </div>
+            ) : (
+            <>
             <ErrorAlert message={error} />
 
             <div className="space-y-3">
@@ -1324,6 +1334,8 @@ const RegisterScreen = ({ onSwitchToLogin, companies = [] }) => {
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Sukurti paskyrą
             </button>
+            </>
+            )}
           </div>
         </div>
 

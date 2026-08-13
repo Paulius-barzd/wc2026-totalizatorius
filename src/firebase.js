@@ -119,7 +119,7 @@ export async function checkUsernameAvailable(username) {
 
 // PROJEKTAS UŽDARYTAS (2026-07). Nauja registracija išjungta, kad neatsirastų naujų
 // asmens duomenų, kol vyksta duomenų trynimas. Norint vėl atidaryti - pašalinti šį bloką.
-const REGISTRATION_CLOSED = true;
+export const REGISTRATION_CLOSED = true;
 
 export async function registerUser(email, password, username, fullName, companyId, companyName, companyCode) {
   if (REGISTRATION_CLOSED) {
